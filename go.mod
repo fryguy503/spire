@@ -20,6 +20,7 @@ require (
 	github.com/k0kubun/pp/v3 v3.2.0
 	github.com/labstack/echo/v4 v4.9.0
 	github.com/labstack/gommon v0.4.0
+	github.com/manifoldco/promptui v0.9.0
 	github.com/mholt/archiver/v4 v4.0.0-alpha.7
 	github.com/muesli/termenv v0.13.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -51,6 +52,7 @@ require (
 	github.com/acomagu/bufpipe v1.0.4 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/aymanbagabas/go-osc52 v1.0.3 // indirect
+	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/cloudflare/circl v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deepmap/oapi-codegen v1.11.0 // indirect
