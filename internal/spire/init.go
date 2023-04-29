@@ -273,7 +273,7 @@ func (o *Init) InitApp(r *InitAppRequest) error {
 	}
 
 	// check if already initialized
-	if o.settings.GetSetting(SettingAuthEnabled).ID > 0 {
+	if o.CheckIfAppInitialized() {
 		return errors.New("app is already initialized")
 	}
 
