@@ -68,7 +68,7 @@ func (g *GithubSourceDownloader) Source(org string, repo string, branch string, 
 			g.logger.Error(err)
 		}
 
-		uz := unzip.New(zipFileLocalLoc, repoDir)
+		uz := unzip.New(zipFileLocalLoc, repoDir, g.logger)
 		err = uz.Extract()
 		if err != nil {
 			g.logger.Error(err)

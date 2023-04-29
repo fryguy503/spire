@@ -88,7 +88,7 @@ func (a SpireAssets) downloadAssets(cachedir string) {
 
 	// unzip the file
 	a.logger.Infof("Downloaded zip to [%v]\n", dumpZip)
-	err = unzip.New(dumpZip, cachedir).Extract()
+	err = unzip.New(dumpZip, cachedir, a.logger).Extract()
 	if err != nil {
 		a.logger.Fatalf("could not extract zip: %v", err)
 	}
