@@ -1,5 +1,7 @@
 ## [Unreleased] (Beta) 8/8/2026
 
+* Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.
+* Fixed character achievement directory queries on MariaDB by replacing the reserved `character` table alias.
 * Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
 * Added Character Achievement administration with paginated state inspection, orphan diagnostics, exact progress repair, guarded completion/reset tools, reward recovery, and pending-mutation management.
 * Added fail-closed achievement schema diagnostics, split content/player database support, transactional stable-identity protection, optimistic concurrency, and audited high-risk operations.
