@@ -1,3 +1,7 @@
+## [Unreleased] (Beta) 8/8/2026
+
+* Fixed item criterion lookup results to render the native item icon supplied by the achievement lookup API.
+
 ## [5.6.1] (Beta) 8/8/2026
 
 * Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.

@@ -418,6 +418,9 @@ func TestAchievementEditorReferenceCatalogsReuseBoundedLookupSpecs(t *testing.T)
 	if specs["zone"].baseWhere != "version = 0" {
 		t.Fatalf("zone lookup lost its bounded base-version policy: %+v", specs["zone"])
 	}
+	if specs["item"].iconExpr != "icon" {
+		t.Fatalf("item lookup must return the item sprite icon ID: %+v", specs["item"])
+	}
 	if validationSpec := achievementEditorReferenceLookupSpec("zone"); validationSpec.baseWhere != "" {
 		t.Fatalf("zone existence validation rejected nonzero-only versions: %+v", validationSpec)
 	}

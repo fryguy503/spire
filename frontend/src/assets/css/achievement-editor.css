@@ -326,6 +326,24 @@
 .achievement-lookup-result:focus { background: rgba(77, 182, 198, .15); outline: none; }
 .achievement-lookup-result strong { color: var(--ae-gold); }
 .achievement-lookup-result small { grid-column: 2; color: var(--ae-muted); }
+.achievement-lookup-result--item {
+  grid-template-columns: 34px auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 44px;
+}
+.achievement-lookup-result--item strong { grid-column: 2; }
+.achievement-lookup-result--item > small { grid-column: 3; }
+.achievement-lookup-result__item-icon {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(215, 173, 85, .28);
+  background: rgba(0, 0, 0, .35);
+  color: var(--ae-muted);
+}
 .achievement-lookup-empty { margin-top: .45rem; color: var(--ae-muted); font-size: .72rem; }
 
 .achievement-npc-helper { margin-top: .55rem; padding: .45rem; border: 1px dashed rgba(77, 182, 198, .35); border-radius: 5px; }

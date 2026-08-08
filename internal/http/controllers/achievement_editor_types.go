@@ -175,6 +175,7 @@ type achievementEditorLookupOption struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	Detail string `json:"detail,omitempty"`
+	IconID uint32 `json:"icon_id,omitempty"`
 }
 
 type achievementEditorLookupPage struct {

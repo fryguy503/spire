@@ -202,9 +202,15 @@ async function installAchievementMocks(page: Page, state: AchievementMockState) 
   });
 
   await page.route('**/api/v1/achievement-editor/lookups/**', route => {
-    const query = new URL(route.request().url()).searchParams.get('q') || '';
+    const url = new URL(route.request().url());
+    const query = url.searchParams.get('q') || '';
+    const isItemLookup = url.pathname.endsWith('/lookups/item');
     return json(route, {
-      data: query ? [{ id: '1', label: 'Exploration', detail: 'Root category' }] : [],
+      data: query
+        ? [isItemLookup
+          ? { id: '10909', label: 'Blade of Tactics', detail: 'Icon 590', icon_id: 590 }
+          : { id: '1', label: 'Exploration', detail: 'Root category' }]
+        : [],
       total: query ? 1 : 0,
       limit: 20,
     });
@@ -470,6 +476,25 @@ test.describe('Achievement Editor', () => {
 
     await selectGraphTab(page, 'Components');
     await expect(targetValue).toHaveValue(maximumTargetValue);
+  });
+
+  test('renders the native item sprite in criterion item lookup results', async ({ page }) => {
+    await gotoAchievementEditor(page);
+    await openDefinition(page);
+    await selectGraphTab(page, 'Components');
+
+    await page.locator('#achievement-criterion-0-0-event').selectOption('6');
+    const picker = page.locator('.achievement-reference-picker').filter({
+      has: page.locator('#achievement-criterion-0-0-target1'),
+    });
+    await picker.getByRole('button', { name: 'Find' }).click();
+    await picker.locator('#achievement-criterion-0-0-target1-lookup-search').fill('10909');
+    await picker.getByRole('button', { name: 'Search' }).click();
+
+    const result = picker.getByRole('option', { name: /10909.*Blade of Tactics/ });
+    await expect(result).toBeVisible();
+    await expect(result.locator('[data-item-icon="590"]')).toBeVisible();
+    await expect(result.locator('.item-590-sm')).toBeVisible();
   });
 
   test('narrows version checks to runtime policy and drops stale server findings after edits', async ({ page }) => {
