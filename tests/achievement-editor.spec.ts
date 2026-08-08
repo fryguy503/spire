@@ -493,6 +493,9 @@ test.describe('Achievement Editor', () => {
 
     const result = picker.getByRole('option', { name: /10909.*Blade of Tactics/ });
     await expect(result).toBeVisible();
+    await expect(result).toHaveCSS('display', 'grid');
+    await expect(result).toHaveCSS('text-align', 'left');
+    await expect(result).toHaveCSS('background-image', 'none');
     await expect(result.locator('[data-item-icon="590"]')).toBeVisible();
     await expect(result.locator('.item-590-sm')).toBeVisible();
   });
