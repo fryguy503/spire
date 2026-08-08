@@ -1,4 +1,4 @@
-## [Unreleased] (Beta) 8/8/2026
+## [5.6.3] (Beta) 8/8/2026
 
 * Fixed achievement item lookup rows to retain their icon grid instead of inheriting the EQ window button skin.
 
