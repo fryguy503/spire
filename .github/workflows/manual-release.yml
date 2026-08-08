@@ -13,7 +13,7 @@ on:
           - Minor Release
           - Major Release
       release_repository:
-        description: Optional GitHub owner/repo override. Leave empty to use package.json.
+        description: Optional GitHub owner/repo override for default-branch releases. Branch prereleases publish here.
         required: false
         type: string
 
@@ -21,6 +21,7 @@ permissions:
   contents: write
 
 concurrency:
+  # Release tags and semantic versions are repository-wide, so serialize every release branch.
   group: manual-release
   cancel-in-progress: false
 
@@ -29,23 +30,29 @@ jobs:
     name: Build And Publish
     runs-on: ubuntu-latest
     env:
-      SPIRE_RELEASE_BRANCH: master
-      SPIRE_RELEASE_REPO: ${{ inputs.release_repository }}
+      SPIRE_RELEASE_BRANCH: ${{ github.ref_name }}
+      SPIRE_RELEASE_REPO: ${{ inputs.release_repository || github.repository }}
       GH_TOKEN: ${{ secrets.GH_RELEASE_GITHUB_API_TOKEN || github.token }}
 
     steps:
-      - name: Confirm release branch
+      - name: Confirm release source
         run: |
-          if [ "${GITHUB_REF_NAME}" != "${SPIRE_RELEASE_BRANCH}" ]; then
-            echo "Manual releases must be run from ${SPIRE_RELEASE_BRANCH}. Select ${SPIRE_RELEASE_BRANCH} in the workflow branch picker." >&2
+          if [ "${GITHUB_REF_TYPE}" != "branch" ]; then
+            echo "Manual releases must be run from a branch, not ${GITHUB_REF_TYPE}." >&2
             exit 1
           fi
+          if [ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ] && [ "${SPIRE_RELEASE_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+            echo "Non-default branch releases must publish to ${GITHUB_REPOSITORY}, not ${SPIRE_RELEASE_REPO}." >&2
+            exit 1
+          fi
+          echo "Building ${GITHUB_REPOSITORY}@${SPIRE_RELEASE_BRANCH}"
+          echo "Publishing the release to ${SPIRE_RELEASE_REPO}"
 
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
           token: ${{ secrets.GH_RELEASE_GITHUB_API_TOKEN || github.token }}
 
       - name: Set up Go
@@ -74,17 +81,41 @@ jobs:
       - name: Validate release repository override
         run: ./scripts/resolve-release-repo.sh >/dev/null
 
+      - name: Verify release source
+        run: go test -count=1 ./boot ./internal/http/controllers ./internal/permissions
+
       - name: Prepare release version
         id: prepare
         run: sh ./scripts/prepare-github-release.sh "${{ inputs.release_type }}"
 
+      - name: Protect stable release channel
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ] && [ "${{ steps.prepare.outputs.prerelease }}" != "true" ]; then
+            echo "Non-default branches may publish Beta prereleases only. Mark the top CHANGELOG.md section as (Beta)." >&2
+            exit 1
+          fi
+
       - name: Check for existing release tag
         run: |
           release_repo="$(./scripts/resolve-release-repo.sh)"
-          if git ls-remote --exit-code --tags "https://github.com/${release_repo}.git" "refs/tags/${{ steps.prepare.outputs.tag }}" >/dev/null 2>&1; then
-            echo "Release tag ${{ steps.prepare.outputs.tag }} already exists in ${release_repo}" >&2
-            exit 1
-          fi
+          tag_status="$(curl -sS -o /tmp/spire-release-tag.json -w '%{http_code}' \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${release_repo}/git/ref/tags/${{ steps.prepare.outputs.tag }}")"
+          case "${tag_status}" in
+            404)
+              ;;
+            200)
+              echo "Release tag ${{ steps.prepare.outputs.tag }} already exists in ${release_repo}" >&2
+              exit 1
+              ;;
+            *)
+              echo "Unable to verify release tag availability in ${release_repo} (GitHub HTTP ${tag_status})." >&2
+              cat /tmp/spire-release-tag.json >&2
+              exit 1
+              ;;
+          esac
 
       - name: Build release assets
         run: |
@@ -92,7 +123,7 @@ jobs:
           ./scripts/validate-changelog.sh
           ./scripts/export-release-notes.sh >/dev/null
           cd frontend
-          npm install
+          npm ci
           npm run build
           cd ..
           make build-binary
@@ -104,7 +135,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md package.json package-lock.json
           git commit -m "Release ${{ steps.prepare.outputs.tag }}"
-          git push origin "HEAD:${SPIRE_RELEASE_BRANCH}"
+          git push origin "HEAD:refs/heads/${SPIRE_RELEASE_BRANCH}"
 
       - name: Publish GitHub release
         run: ./scripts/publish-release.sh
@@ -113,7 +144,11 @@ jobs:
         run: |
           release_repo="$(./scripts/resolve-release-repo.sh)"
           if [ "${{ steps.prepare.outputs.prerelease }}" = "true" ]; then
-            release_json="$(curl -fsSL "https://api.github.com/repos/${release_repo}/releases/tags/${{ steps.prepare.outputs.tag }}")"
+            release_json="$(curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${release_repo}/releases/tags/${{ steps.prepare.outputs.tag }}")"
             release_tag="$(printf '%s' "$release_json" | jq -r '.tag_name')"
             release_prerelease="$(printf '%s' "$release_json" | jq -r '.prerelease')"
             if [ "$release_tag" != "${{ steps.prepare.outputs.tag }}" ] || [ "$release_prerelease" != "true" ]; then
@@ -122,7 +157,11 @@ jobs:
             fi
             echo "Verified beta release ${release_tag}; stable update checks remain on the latest non-prerelease."
           else
-            latest_json="$(curl -fsSL "https://api.github.com/repos/${release_repo}/releases/latest")"
+            latest_json="$(curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${release_repo}/releases/latest")"
             latest_tag="$(printf '%s' "$latest_json" | jq -r '.tag_name')"
             latest_prerelease="$(printf '%s' "$latest_json" | jq -r '.prerelease')"
             if [ "$latest_tag" != "${{ steps.prepare.outputs.tag }}" ] || [ "$latest_prerelease" != "false" ]; then
