@@ -1,3 +1,10 @@
+## [Unreleased] (Beta) 8/8/2026
+
+* Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
+* Added Character Achievement administration with paginated state inspection, orphan diagnostics, exact progress repair, guarded completion/reset tools, reward recovery, and pending-mutation management.
+* Added fail-closed achievement schema diagnostics, split content/player database support, transactional stable-identity protection, optimistic concurrency, and audited high-risk operations.
+* Added achievement editor navigation, responsive layouts, contextual field help, canonical EQEmu skill labels, and focused backend and browser regression coverage.
+
 ## [5.5.2] (Beta) 7/31/2026
 
 * Added a Data Buckets Editor with scoped browsing, JSON formatting, lifecycle controls, consumer visibility, audit history, and stale-write conflict recovery.
