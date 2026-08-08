@@ -1,6 +1,40 @@
 package controllers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+func TestCharacterAchievementSummaryQueryUsesNonReservedCharacterAlias(t *testing.T) {
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		DSN:                       "user:pass@tcp(localhost:3306)/peq",
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{DryRun: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("create dry-run GORM DB: %v", err)
+	}
+
+	sql := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		var total int64
+		return characterAchievementEditorCharacterSummaryQuery(tx, "Lyric", "online").Count(&total)
+	})
+	for _, fragment := range []string{
+		"character_data character_record",
+		"character_record.deleted_at IS NULL",
+		"character_record.name LIKE",
+		"character_record.ingame = 1",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("character summary SQL is missing %q: %s", fragment, sql)
+		}
+	}
+	if strings.Contains(sql, "character_data character WHERE") {
+		t.Fatalf("character summary SQL reused MariaDB-reserved alias character: %s", sql)
+	}
+}
 
 func TestCharacterAchievementDefinitionResolutionBoundsOrphanLookup(t *testing.T) {
 	definitions := []achievementEditorDefinitionSummary{{ID: 10}, {ID: 20}}

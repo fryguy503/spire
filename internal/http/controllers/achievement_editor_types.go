@@ -31,11 +31,11 @@ type achievementEditorDefinition struct {
 	DefinitionVersion    uint32                             `json:"definition_version"`
 	ResetOnVersionChange bool                               `json:"reset_on_version_change"`
 	Enabled              bool                               `json:"enabled"`
-	Associations         []achievementEditorAssociation     `json:"associations"`
-	Components           []achievementEditorComponent       `json:"components"`
-	Rewards              []achievementEditorReward          `json:"rewards"`
-	RewardSet            *achievementEditorRewardSet        `json:"reward_set"`
-	Restrictions         []achievementEditorCastRestriction `json:"restrictions"`
+	Associations         []achievementEditorAssociation     `json:"associations" gorm:"-"`
+	Components           []achievementEditorComponent       `json:"components" gorm:"-"`
+	Rewards              []achievementEditorReward          `json:"rewards" gorm:"-"`
+	RewardSet            *achievementEditorRewardSet        `json:"reward_set" gorm:"-"`
+	Restrictions         []achievementEditorCastRestriction `json:"restrictions" gorm:"-"`
 }
 
 type achievementEditorGraph = achievementEditorDefinition
@@ -56,7 +56,7 @@ type achievementEditorComponent struct {
 	Description       string                       `json:"description"`
 	Description2      string                       `json:"description_2"`
 	PresentationCount uint32                       `json:"presentation_count"`
-	Criteria          []achievementEditorCriterion `json:"criteria"`
+	Criteria          []achievementEditorCriterion `json:"criteria" gorm:"-"`
 	// RecoveryOnly marks a synthetic component emitted when criteria survived
 	// after their owning achievement_components row disappeared. These fields
 	// are editor protocol state only; they are never persisted directly.
@@ -100,8 +100,8 @@ type achievementEditorRewardSet struct {
 	AchievementID uint32                           `json:"achievement_id,omitempty"`
 	Title         string                           `json:"title"`
 	Enabled       bool                             `json:"enabled"`
-	Options       []achievementEditorRewardOption  `json:"options"`
-	Mappings      []achievementEditorRewardMapping `json:"mappings"`
+	Options       []achievementEditorRewardOption  `json:"options" gorm:"-"`
+	Mappings      []achievementEditorRewardMapping `json:"mappings" gorm:"-"`
 }
 
 type achievementEditorRewardOption struct {

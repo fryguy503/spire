@@ -19,42 +19,47 @@ func newCharacterAchievementEditorService(characterDB *gorm.DB, contentDB *gorm.
 	return &characterAchievementEditorService{characterDB: characterDB, contentDB: contentDB}
 }
 
-func (s *characterAchievementEditorService) listCharacters(search string, presence string, page int, limit int) ([]achievementEditorCharacterSummary, int64, error) {
-	base := s.characterDB.Table("character_data character").Where("character.deleted_at IS NULL")
+func characterAchievementEditorCharacterSummaryQuery(db *gorm.DB, search string, presence string) *gorm.DB {
+	base := db.Table("character_data character_record").Where("character_record.deleted_at IS NULL")
 	search = strings.TrimSpace(search)
 	if search != "" {
 		like := "%" + search + "%"
 		if id, err := strconv.ParseUint(search, 10, 32); err == nil {
-			base = base.Where("character.id = ? OR character.name LIKE ?", id, like)
+			base = base.Where("character_record.id = ? OR character_record.name LIKE ?", id, like)
 		} else {
-			base = base.Where("character.name LIKE ?", like)
+			base = base.Where("character_record.name LIKE ?", like)
 		}
 	}
 	switch presence {
 	case "online":
-		base = base.Where("character.ingame = 1")
+		base = base.Where("character_record.ingame = 1")
 	case "offline":
-		base = base.Where("character.ingame = 0")
+		base = base.Where("character_record.ingame = 0")
 	}
+	return base
+}
+
+func (s *characterAchievementEditorService) listCharacters(search string, presence string, page int, limit int) ([]achievementEditorCharacterSummary, int64, error) {
+	base := characterAchievementEditorCharacterSummaryQuery(s.characterDB, search, presence)
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	rows := make([]achievementEditorCharacterSummary, 0)
 	selectSQL := `
-		character.id, character.account_id, character.name, character.level, character.class,
-		character.ingame AS in_game, character.last_login,
-		(SELECT COUNT(*) FROM character_achievements completion WHERE completion.character_id = character.id) AS achievement_completion_count,
+		character_record.id, character_record.account_id, character_record.name, character_record.level, character_record.class,
+		character_record.ingame AS in_game, character_record.last_login,
+		(SELECT COUNT(*) FROM character_achievements completion WHERE completion.character_id = character_record.id) AS achievement_completion_count,
 		(SELECT COUNT(DISTINCT progress.achievement_id) FROM character_achievement_progress progress
-			WHERE progress.character_id = character.id
+			WHERE progress.character_id = character_record.id
 			AND NOT EXISTS (
 				SELECT 1 FROM character_achievements completed
-				WHERE completed.character_id = character.id AND completed.achievement_id = progress.achievement_id
+				WHERE completed.character_id = character_record.id AND completed.achievement_id = progress.achievement_id
 			)) AS achievement_progress_count,
-		(SELECT COUNT(*) FROM character_achievement_progress progress_rows WHERE progress_rows.character_id = character.id) AS achievement_progress_row_count,
+		(SELECT COUNT(*) FROM character_achievement_progress progress_rows WHERE progress_rows.character_id = character_record.id) AS achievement_progress_row_count,
 		CAST(COALESCE((SELECT SUM(progress_total.current_count) FROM character_achievement_progress progress_total
-			WHERE progress_total.character_id = character.id), 0) AS CHAR) AS achievement_progress_total`
-	if err := base.Select(selectSQL).Order("character.name, character.id").
+			WHERE progress_total.character_id = character_record.id), 0) AS CHAR) AS achievement_progress_total`
+	if err := base.Select(selectSQL).Order("character_record.name, character_record.id").
 		Limit(limit).Offset((page - 1) * limit).Scan(&rows).Error; err != nil {
 		return nil, 0, err
 	}
