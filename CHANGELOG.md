@@ -1,3 +1,7 @@
+## [Unreleased] (Beta) 8/8/2026
+
+* Fixed achievement item lookup rows to retain their icon grid instead of inheriting the EQ window button skin.
+
 ## [5.6.2] (Beta) 8/8/2026
 
 * Fixed item criterion lookup results to render the native item icon supplied by the achievement lookup API.

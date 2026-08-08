@@ -311,19 +311,29 @@
 }
 
 .achievement-lookup-results { display: grid; max-height: 240px; overflow: auto; margin-top: .45rem; }
-.achievement-lookup-result {
+/* Keep result rows out of EqWindow's generic native-button skin. */
+.achievement-editor [class|="eq-window"] .achievement-lookup-results button.achievement-lookup-result {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
   gap: .15rem .45rem;
   padding: .42rem .5rem;
   border: 0;
   border-bottom: 1px solid var(--ae-line);
+  border-radius: 0;
   background: transparent;
+  box-shadow: none;
   color: #e8eff3;
   text-align: left;
 }
-.achievement-lookup-result:hover,
-.achievement-lookup-result:focus { background: rgba(77, 182, 198, .15); outline: none; }
+.achievement-editor [class|="eq-window"] .achievement-lookup-results button.achievement-lookup-result:hover,
+.achievement-editor [class|="eq-window"] .achievement-lookup-results button.achievement-lookup-result:focus {
+  border: 0;
+  border-bottom: 1px solid var(--ae-line);
+  background: rgba(77, 182, 198, .15);
+  box-shadow: none;
+  outline: none;
+}
 .achievement-lookup-result strong { color: var(--ae-gold); }
 .achievement-lookup-result small { grid-column: 2; color: var(--ae-muted); }
 .achievement-lookup-result--item {
