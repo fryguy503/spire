@@ -1,3 +1,8 @@
+## [Unreleased] (Beta) 8/8/2026
+
+* Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.
+* Fixed character achievement directory queries on MariaDB by replacing the reserved `character` table alias.
+
 ## [5.6.0] (Beta) 8/8/2026
 
 * Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
