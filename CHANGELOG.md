@@ -1,4 +1,4 @@
-## [Unreleased] (Beta) 8/8/2026
+## [5.6.0] (Beta) 8/8/2026
 
 * Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
 * Added Character Achievement administration with paginated state inspection, orphan diagnostics, exact progress repair, guarded completion/reset tools, reward recovery, and pending-mutation management.
