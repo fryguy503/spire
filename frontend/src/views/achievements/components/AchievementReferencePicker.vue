@@ -55,10 +55,21 @@
           :key="String(row.id)"
           type="button"
           class="achievement-lookup-result"
+          :class="{ 'achievement-lookup-result--item': apiKind === 'item' }"
           role="option"
           :aria-selected="String(row.id) === String(value) ? 'true' : 'false'"
           @click="choose(row)"
         >
+          <span
+            v-if="apiKind === 'item'"
+            class="achievement-lookup-result__item-icon"
+            :data-item-icon="row.icon_id || 0"
+            :title="row.icon_id ? ('Item icon ' + row.icon_id) : 'No item icon'"
+            aria-hidden="true"
+          >
+            <span v-if="row.icon_id" :class="'item-' + row.icon_id + '-sm'"></span>
+            <i v-else class="fa fa-cube"></i>
+          </span>
           <strong>#{{ row.id }}</strong>
           <span>{{ row.label || row.name || 'Unnamed record' }}</span>
           <small v-if="row.detail">{{ row.detail }}</small>
@@ -137,7 +148,8 @@
             params: { q: this.query, limit: Math.min(Math.max(Number(this.limit), 1), 50) }
           })
           const payload = response.data || {}
-          this.results = Array.isArray(payload) ? payload.slice(0, this.limit) : (payload.data || []).slice(0, this.limit)
+          const rows = Array.isArray(payload) ? payload : (payload.data || [])
+          this.results = rows.slice(0, this.limit)
         } catch (error) {
           this.results = []
           this.error = this.errorMessage(error, 'Lookup could not be loaded.')

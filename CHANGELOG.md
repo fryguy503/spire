@@ -1,5 +1,6 @@
 ## [Unreleased] (Beta) 8/8/2026
 
+* Fixed item criterion lookup results to render the native item icon supplied by the achievement lookup API.
 * Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.
 * Fixed character achievement directory queries on MariaDB by replacing the reserved `character` table alias.
 * Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.

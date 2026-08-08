@@ -1244,21 +1244,22 @@ type achievementEditorLookupSpec struct {
 	idColumn   string
 	labelExpr  string
 	detailExpr string
+	iconExpr   string
 	baseWhere  string
 	orderBy    string
 }
 
 func achievementEditorLookupSpecs() map[string]achievementEditorLookupSpec {
 	return map[string]achievementEditorLookupSpec{
-		"achievement": {"achievements", "id", "name", "description", "", "name, id"},
-		"category":    {"achievement_categories", "id", "name", "description", "", "name, id"},
-		"npc":         {"npc_types", "id", "name", "CONCAT('Level ', level, ' race ', race)", "", "name, id"},
-		"task":        {"tasks", "id", "title", "description", "", "title, id"},
-		"zone":        {"zone", "zoneidnumber", "long_name", "short_name", "version = 0", "long_name, zoneidnumber"},
-		"item":        {"items", "id", "Name", "CONCAT('Icon ', icon)", "", "Name, id"},
-		"recipe":      {"tradeskill_recipe", "id", "name", "CONCAT('Tradeskill ', tradeskill, ', trivial ', trivial)", "", "name, id"},
-		"currency":    {"alternate_currency", "id", "CONCAT('Currency ', id)", "CONCAT('Token item ', item_id)", "", "id"},
-		"title-set":   {"titles", "title_set", "CONCAT_WS(' / ', NULLIF(prefix, ''), NULLIF(suffix, ''))", "CONCAT('Title row ', id)", "title_set > 0", "title_set, id"},
+		"achievement": {from: "achievements", idColumn: "id", labelExpr: "name", detailExpr: "description", orderBy: "name, id"},
+		"category":    {from: "achievement_categories", idColumn: "id", labelExpr: "name", detailExpr: "description", orderBy: "name, id"},
+		"npc":         {from: "npc_types", idColumn: "id", labelExpr: "name", detailExpr: "CONCAT('Level ', level, ' race ', race)", orderBy: "name, id"},
+		"task":        {from: "tasks", idColumn: "id", labelExpr: "title", detailExpr: "description", orderBy: "title, id"},
+		"zone":        {from: "zone", idColumn: "zoneidnumber", labelExpr: "long_name", detailExpr: "short_name", baseWhere: "version = 0", orderBy: "long_name, zoneidnumber"},
+		"item":        {from: "items", idColumn: "id", labelExpr: "Name", detailExpr: "CONCAT('Icon ', icon)", iconExpr: "icon", orderBy: "Name, id"},
+		"recipe":      {from: "tradeskill_recipe", idColumn: "id", labelExpr: "name", detailExpr: "CONCAT('Tradeskill ', tradeskill, ', trivial ', trivial)", orderBy: "name, id"},
+		"currency":    {from: "alternate_currency", idColumn: "id", labelExpr: "CONCAT('Currency ', id)", detailExpr: "CONCAT('Token item ', item_id)", orderBy: "id"},
+		"title-set":   {from: "titles", idColumn: "title_set", labelExpr: "CONCAT_WS(' / ', NULLIF(prefix, ''), NULLIF(suffix, ''))", detailExpr: "CONCAT('Title row ', id)", baseWhere: "title_set > 0", orderBy: "title_set, id"},
 	}
 }
 
@@ -1302,7 +1303,11 @@ func (r *achievementEditorRepository) lookup(kind string, search string, ids []u
 	} else {
 		return make([]achievementEditorLookupOption, 0), nil
 	}
-	query := "SELECT CAST(" + spec.idColumn + " AS CHAR) AS id, " + spec.labelExpr + " AS label, " + spec.detailExpr + " AS detail FROM " + spec.from
+	query := "SELECT CAST(" + spec.idColumn + " AS CHAR) AS id, " + spec.labelExpr + " AS label, " + spec.detailExpr + " AS detail"
+	if spec.iconExpr != "" {
+		query += ", " + spec.iconExpr + " AS icon_id"
+	}
+	query += " FROM " + spec.from
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
