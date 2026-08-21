@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -30,7 +31,7 @@ func achievementEditorWithAdvisoryLock(
 			return err
 		}
 		if lock.Acquired == nil || *lock.Acquired != 1 {
-			return operationalEditorConflict("Another achievement mutation is active; retry after it completes")
+			return operationalEditorConflict("Another achievement update is active; retry after it completes")
 		}
 		defer func() {
 			var release struct {
@@ -43,11 +44,11 @@ func achievementEditorWithAdvisoryLock(
 			if releaseErr != nil {
 				connection.Logger.Error(
 					context.Background(),
-					"HIGH SEVERITY: achievement advisory unlock failed after work completed; preserving the mutation outcome to prevent an unsafe retry: %v",
+					"HIGH SEVERITY: achievement advisory unlock failed after work completed; preserving the update outcome to prevent an unsafe retry: %v",
 					releaseErr,
 				)
 			}
-			err = achievementEditorAdvisoryMutationOutcome(err, releaseErr)
+			err = achievementEditorAdvisoryUpdateOutcome(err, releaseErr)
 		}()
 
 		err = work(connection)
@@ -55,12 +56,12 @@ func achievementEditorWithAdvisoryLock(
 	})
 }
 
-// achievementEditorAdvisoryMutationOutcome deliberately treats the committed
-// mutation (or its original failure) as authoritative. Reporting an unlock
+// achievementEditorAdvisoryUpdateOutcome deliberately treats the committed
+// update (or its original failure) as authoritative. Reporting an unlock
 // failure to the API after commit makes clients retry a change that already
-// happened and can duplicate durable delivery or authoring mutations.
-func achievementEditorAdvisoryMutationOutcome(mutationErr, _ error) error {
-	return mutationErr
+// happened and can duplicate durable delivery or authoring updates.
+func achievementEditorAdvisoryUpdateOutcome(updateErr, _ error) error {
+	return updateErr
 }
 
 // achievementEditorWithAdvisoryTransaction holds the shared authoring lock
@@ -69,10 +70,10 @@ func achievementEditorWithAdvisoryTransaction(
 	db *gorm.DB,
 	lockName string,
 	timeoutSeconds int,
-	mutation func(*gorm.DB) error,
+	update func(*gorm.DB) error,
 ) error {
 	return achievementEditorWithAdvisoryLock(db, lockName, timeoutSeconds, func(connection *gorm.DB) error {
-		return connection.Transaction(mutation)
+		return connection.Transaction(update)
 	})
 }
 
@@ -137,6 +138,7 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 	}
 	type runtimeReward struct {
 		RewardID     string `json:"reward_id"`
+		Sequence     uint32 `json:"sequence"`
 		RewardType   uint8  `json:"reward_type"`
 		RewardDataID uint32 `json:"reward_data_id"`
 		Amount       string `json:"amount"`
@@ -149,6 +151,7 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 	}
 	type runtimeRewardMapping struct {
 		OptionID uint32 `json:"option_id"`
+		Sequence uint32 `json:"sequence"`
 		RewardID string `json:"reward_id"`
 	}
 	type runtimeRewardSet struct {
@@ -158,6 +161,7 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 	}
 	type runtimePolicy struct {
 		ResetOnVersionChange bool                   `json:"reset_on_version_change"`
+		RewardSourceEnabled  bool                   `json:"reward_source_enabled"`
 		Components           []runtimeComponent     `json:"components"`
 		Rewards              []runtimeReward        `json:"rewards"`
 		MappedRewards        []runtimeRewardMapping `json:"mapped_rewards"`
@@ -170,15 +174,24 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 		Rewards:              make([]runtimeReward, 0, len(graph.Rewards)),
 		MappedRewards:        make([]runtimeRewardMapping, 0),
 	}
-	enabledRewardIDs := make(map[string]bool)
+	if graph.RewardSet != nil {
+		policy.RewardSourceEnabled = graph.RewardSet.SourceEnabled
+	}
+	enabledRewardIDs := make(map[string]string)
 	for index, reward := range graph.Rewards {
 		if !reward.Enabled {
 			continue
 		}
-		enabledRewardIDs[reward.RewardID] = true
-		enabledRewardIDs[fmt.Sprintf("@%d", index)] = true
+		canonicalRewardID := strings.TrimSpace(reward.RewardID)
+		if canonicalRewardID == "" {
+			canonicalRewardID = fmt.Sprintf("@new:%d:%d:%s", reward.RewardType, reward.RewardDataID, reward.Amount)
+		} else {
+			enabledRewardIDs[reward.RewardID] = canonicalRewardID
+		}
+		enabledRewardIDs[fmt.Sprintf("@%d", index)] = canonicalRewardID
 		policy.Rewards = append(policy.Rewards, runtimeReward{
-			RewardID:     reward.RewardID,
+			RewardID:     canonicalRewardID,
+			Sequence:     reward.Sequence,
 			RewardType:   reward.RewardType,
 			RewardDataID: reward.RewardDataID,
 			Amount:       reward.Amount,
@@ -186,16 +199,18 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 	}
 	if graph.RewardSet != nil {
 		for _, mapping := range graph.RewardSet.Mappings {
-			if !enabledRewardIDs[mapping.RewardID] {
+			canonicalRewardID, enabled := enabledRewardIDs[mapping.RewardID]
+			if !enabled {
 				continue
 			}
 			policy.MappedRewards = append(policy.MappedRewards, runtimeRewardMapping{
 				OptionID: mapping.OptionID,
-				RewardID: mapping.RewardID,
+				Sequence: mapping.Sequence,
+				RewardID: canonicalRewardID,
 			})
 		}
 	}
-	if graph.RewardSet != nil && graph.RewardSet.Enabled {
+	if graph.RewardSet != nil && graph.RewardSet.SourceEnabled && graph.RewardSet.Enabled {
 		policy.RewardSet = &runtimeRewardSet{
 			RewardSetID: graph.RewardSet.RewardSetID,
 			Options:     make([]runtimeRewardOption, 0, len(graph.RewardSet.Options)),
@@ -211,15 +226,18 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 				OptionID:    option.OptionID,
 				CommonToAll: option.CommonToAll,
 				Flags:       option.Flags,
+				Enabled:     true,
 			})
 		}
 		for _, mapping := range graph.RewardSet.Mappings {
-			if !enabledOptionIDs[mapping.OptionID] || !enabledRewardIDs[mapping.RewardID] {
+			canonicalRewardID, rewardEnabled := enabledRewardIDs[mapping.RewardID]
+			if !enabledOptionIDs[mapping.OptionID] || !rewardEnabled {
 				continue
 			}
 			policy.RewardSet.Mappings = append(policy.RewardSet.Mappings, runtimeRewardMapping{
 				OptionID: mapping.OptionID,
-				RewardID: mapping.RewardID,
+				Sequence: mapping.Sequence,
+				RewardID: canonicalRewardID,
 			})
 		}
 	}
@@ -256,8 +274,75 @@ func achievementEditorRuntimePolicyRevision(graph achievementEditorGraph) (strin
 			})
 		}
 		if len(runtimeComponentRow.Criteria) > 0 {
+			sort.Slice(runtimeComponentRow.Criteria, func(i, j int) bool {
+				left, right := runtimeComponentRow.Criteria[i], runtimeComponentRow.Criteria[j]
+				if left.EventType != right.EventType {
+					return left.EventType < right.EventType
+				}
+				if left.TargetID != right.TargetID {
+					return left.TargetID < right.TargetID
+				}
+				if left.TargetID2 != right.TargetID2 {
+					return left.TargetID2 < right.TargetID2
+				}
+				if left.TargetValue != right.TargetValue {
+					return left.TargetValue < right.TargetValue
+				}
+				if left.ProgressMode != right.ProgressMode {
+					return left.ProgressMode < right.ProgressMode
+				}
+				if left.Behavior != right.Behavior {
+					return left.Behavior < right.Behavior
+				}
+				return left.RequiredCount < right.RequiredCount
+			})
 			policy.Components = append(policy.Components, runtimeComponentRow)
 		}
+	}
+	sort.Slice(policy.Components, func(i, j int) bool {
+		if policy.Components[i].ComponentType != policy.Components[j].ComponentType {
+			return policy.Components[i].ComponentType < policy.Components[j].ComponentType
+		}
+		return policy.Components[i].ComponentID < policy.Components[j].ComponentID
+	})
+	sort.Slice(policy.Rewards, func(i, j int) bool {
+		left, right := policy.Rewards[i], policy.Rewards[j]
+		if left.RewardID != right.RewardID {
+			return left.RewardID < right.RewardID
+		}
+		if left.Sequence != right.Sequence {
+			return left.Sequence < right.Sequence
+		}
+		if left.RewardType != right.RewardType {
+			return left.RewardType < right.RewardType
+		}
+		if left.RewardDataID != right.RewardDataID {
+			return left.RewardDataID < right.RewardDataID
+		}
+		return left.Amount < right.Amount
+	})
+	sort.Slice(policy.MappedRewards, func(i, j int) bool {
+		if policy.MappedRewards[i].OptionID != policy.MappedRewards[j].OptionID {
+			return policy.MappedRewards[i].OptionID < policy.MappedRewards[j].OptionID
+		}
+		if policy.MappedRewards[i].Sequence != policy.MappedRewards[j].Sequence {
+			return policy.MappedRewards[i].Sequence < policy.MappedRewards[j].Sequence
+		}
+		return policy.MappedRewards[i].RewardID < policy.MappedRewards[j].RewardID
+	})
+	if policy.RewardSet != nil {
+		sort.Slice(policy.RewardSet.Options, func(i, j int) bool {
+			return policy.RewardSet.Options[i].OptionID < policy.RewardSet.Options[j].OptionID
+		})
+		sort.Slice(policy.RewardSet.Mappings, func(i, j int) bool {
+			if policy.RewardSet.Mappings[i].OptionID != policy.RewardSet.Mappings[j].OptionID {
+				return policy.RewardSet.Mappings[i].OptionID < policy.RewardSet.Mappings[j].OptionID
+			}
+			if policy.RewardSet.Mappings[i].Sequence != policy.RewardSet.Mappings[j].Sequence {
+				return policy.RewardSet.Mappings[i].Sequence < policy.RewardSet.Mappings[j].Sequence
+			}
+			return policy.RewardSet.Mappings[i].RewardID < policy.RewardSet.Mappings[j].RewardID
+		})
 	}
 	payload, err := json.Marshal(policy)
 	if err != nil {

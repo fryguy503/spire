@@ -1,3 +1,9 @@
+## [Unreleased] (Beta) 8/21/2026
+
+* Updated the achievement definition and character achievement editors for the final shared reward schema, with safer shared-catalog preservation, validation, concurrency handling, and reward recovery.
+* Bounded achievement validation and reference queries so large content catalogs remain responsive and fail safely.
+* Added specific Alternate Advancement rewards with AA rank-chain lookup, class eligibility guidance, fallback-item validation, recovery support, and focused backend and browser coverage.
+
 ## [5.6.3] (Beta) 8/8/2026
 
 * Fixed achievement item lookup rows to retain their icon grid instead of inheriting the EQ window button skin.

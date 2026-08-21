@@ -22,7 +22,7 @@ export interface AchievementValidationIssue {
 // The API body wraps the graph with audit and optimistic-concurrency fields.
 // Reserve enough UTF-8 space for that envelope so client validation cannot
 // approve a graph that Echo will reject at the exact 2 MiB body boundary.
-const GRAPH_MUTATION_ENVELOPE_RESERVE_BYTES = 4096
+const GRAPH_UPDATE_ENVELOPE_RESERVE_BYTES = 4096
 const TEXT_MAX_BYTES = 65535
 
 export const CANONICAL_SKILLS: AchievementEnumOption[] = [
@@ -80,7 +80,7 @@ export const FALLBACK_METADATA: any = {
     components: 1000,
     criteria: 2000,
     rewards: 500,
-    restrictions: 500,
+    requirements: 500,
     options: 500,
     lookup_results: 25
   },
@@ -110,7 +110,9 @@ export const FALLBACK_METADATA: any = {
     { value: 2, label: 'Alternate Advancement', help: 'Reward data must be 0; amount is AA points.' },
     { value: 3, label: 'Copper', help: 'Reward data must be 0; amount is copper pieces.' },
     { value: 4, label: 'Alternate Currency', help: 'Reward data is the currency ID; amount is currency granted.' },
-    { value: 5, label: 'Title', help: 'Reward data is the title-set ID; amount must be positive.' }
+    { value: 5, label: 'Title', help: 'Reward data is the title-set ID; amount must be 1.' },
+    { value: 6, label: 'Alternate Advancement Ability', help: 'Reward data is an enabled aa_ability.id; amount is the desired cumulative rank and that rank must exist.' },
+    { value: 7, label: 'Class-ineligible AA fallback', help: 'Automatic-achievement-only inverse-class fallback. Reward data must match exactly one automatic type 6 ability; amount is unspent AA points for ineligible playable classes.' }
   ],
   events: [
     eventHelp(0, 'Manual', 'No engine event is observed. Quest or administrative APIs update it.', 'Target ID', 'Normally 0.', 'Secondary target', 'Must be 0.', 'Target value', 'Normally 0.', null, [0, 1, 2, 3]),
@@ -140,9 +142,9 @@ export const FIELD_HELP: any = {
     description: ['Description', 'Player-facing explanation of what is required. Limited to 65,535 UTF-8 bytes by the source TEXT column.'],
     icon_id: ['Icon ID', 'Unsigned client icon identifier. Use 0 when no verified icon is known.'],
     points: ['Points', 'Score awarded for completing the achievement.'],
-    reward_display: ['Reward display value', 'Unsigned client presentation/provenance value only; it does not deliver rewards.'],
-    world_display_flag: ['World display flag', 'Controls newer-client world presentation. Older clients such as RoF2 may ignore it.'],
-    definition_version: ['Definition version', 'Nonzero durable schema version. Increment only when a deployed graph change makes old character state incompatible.'],
+    has_reward: ['Imported reward hint', 'Imported client hint only; the runtime derives effective reward visibility from reachable enabled reward content.'],
+    client_flag: ['Client flag', 'Uninterpreted unsigned 8-bit import/export field; RoF2 does not serialize it.'],
+    version: ['Definition version', 'Unsigned durable schema version; 0 is a valid initial version. Increment when a deployed graph change makes old character state incompatible.'],
     reset_on_version_change: ['Reset on version change', 'When enabled, a version mismatch removes old completion, progress, reward, and selection state.'],
     enabled: ['Published', 'Only enabled, valid definitions enter the active server snapshot. New definitions are intentionally disabled.']
   },
@@ -155,9 +157,9 @@ export const FIELD_HELP: any = {
     component_type: ['Wire type', 'Client component wire type 0-3. Type 3 is presentation-only and cannot contain enabled criteria.'],
     sequence: ['Client order', 'Client display ordering value. RoF2 effectively clamps this to 255.'],
     component_id: ['Component ID', 'Stable identifier unique with achievement and wire type. Zero is valid.'],
-    description: ['Primary description', 'Player-facing component requirement text. Limited to 65,535 UTF-8 bytes by the source TEXT column.'],
-    description_2: ['Secondary description', 'Optional second line of player-facing component text. Limited to 65,535 UTF-8 bytes by the source TEXT column.'],
-    presentation_count: ['Presentation count', 'Default count shown by the client. Enabled criteria may supply the authoritative required count.']
+    name: ['Component name', 'Primary player-facing component requirement text. Limited to 65,535 UTF-8 bytes by the source TEXT column.'],
+    description: ['Component description', 'Optional secondary player-facing component text. Limited to 65,535 UTF-8 bytes by the source TEXT column.'],
+    presentation_count: ['Imported presentation count', 'Default count from achievement_associations. Enabled criteria supply the authoritative progress requirement.']
   },
   criteria: {
     event_type: ['Event', 'The engine event or state comparison that updates this criterion.'],
@@ -170,18 +172,19 @@ export const FIELD_HELP: any = {
     enabled: ['Enabled', 'Disabled criteria remain authored but do not participate in active evaluation.']
   },
   rewards: {
-    reward_id: ['Reward ID', 'Stable unsigned BIGINT identity allocated transactionally for a new blank row. Persisted IDs are immutable and must never be renumbered.'],
-    sequence: ['Delivery order', 'Unique ordering among canonical rewards.'],
+    reward_id: ['Reward ID', 'Stable unsigned INT identity allocated transactionally for a new blank row. Persisted IDs are immutable and must never be renumbered.'],
+    sequence: ['Grant order', 'Order within automatic source entries, or within the selected option when this grant is mapped.'],
     reward_type: ['Reward type', 'Controls how reward data and amount are interpreted.'],
-    reward_data_id: ['Referenced data', 'Type-specific ID such as item, alternate currency, or title-set ID.'],
-    amount: ['Amount', 'Positive quantity delivered when this grant is awarded.'],
+    reward_data_id: ['Referenced data', 'Type-specific ID such as item, alternate currency, title set, or AA ability ID.'],
+    amount: ['Amount', 'Positive quantity delivered when this grant is awarded. For type 6 this is the desired cumulative AA rank; for type 7 it is fallback AA points.'],
     description: ['Client description', 'Player-facing reward text. The server may derive a fallback when blank.'],
     enabled: ['Enabled', 'Disabled grants remain authored but are not delivered.']
   },
   reward_sets: {
     reward_set_id: ['Stable set ID', 'Nonzero durable identity for this selectable reward set.'],
     title: ['Prompt / title', 'Player-facing selection prompt; the achievement name is used when blank.'],
-    enabled: ['Use selectable rewards', 'Requires an enabled non-common choice and an enabled grant for every enabled option.']
+    enabled: ['Set enabled', 'Controls the provider-independent set. It becomes selectable only while the achievement source link is also enabled.'],
+    source_enabled: ['Source link enabled', 'Controls this achievement-to-set mapping independently of the shared set. Disable it to stage or retire selectable rewards safely.']
   },
   reward_options: {
     option_id: ['Option ID', 'Stable nonzero identity for the selectable row.'],
@@ -191,7 +194,7 @@ export const FIELD_HELP: any = {
     flags: ['Flags', 'Wire-level option flags. Use 0 unless server/client behavior is documented.'],
     enabled: ['Enabled', 'Every enabled option must map to at least one enabled canonical reward.']
   },
-  restrictions: {
+  requirements: {
     restriction_id: ['Restriction ID', 'Existing spell cast-restriction number. All rows sharing an ID must pass.'],
     requires_completed: ['Required state', 'Enabled means the achievement must be complete; disabled means it must remain incomplete.']
   },
@@ -265,7 +268,7 @@ export function mergeMetadata (raw: any): any {
       components: Number(serverLimits.max_components || serverLimits.components || FALLBACK_METADATA.limits.components),
       criteria: Number(serverLimits.max_criteria || serverLimits.criteria || FALLBACK_METADATA.limits.criteria),
       rewards: Number(serverLimits.max_rewards || serverLimits.rewards || FALLBACK_METADATA.limits.rewards),
-      restrictions: Number(serverLimits.max_restrictions || serverLimits.restrictions || FALLBACK_METADATA.limits.restrictions),
+      requirements: Number(serverLimits.max_requirements || serverLimits.requirements || FALLBACK_METADATA.limits.requirements),
       options: Number(serverLimits.max_reward_options || serverLimits.options || FALLBACK_METADATA.limits.options)
     },
     fields: { ...(FALLBACK_METADATA.fields || {}), ...(metadata.fields || {}) },
@@ -280,10 +283,10 @@ export function fieldHelp (metadata: any, table: string, field: string): { label
     associations: 'achievement_category_associations',
     components: 'achievement_components',
     criteria: 'achievement_criteria',
-    rewards: 'achievement_rewards',
-    reward_sets: 'achievement_reward_sets',
-    reward_options: 'achievement_reward_options',
-    restrictions: 'achievement_cast_restrictions'
+    rewards: 'rewards',
+    reward_sets: 'reward_sets',
+    reward_options: 'reward_options',
+    requirements: 'achievement_cast_requirements'
   }
   const serverTable = aliases[table] || table
   const server = metadata && metadata.fields && metadata.fields[serverTable] && metadata.fields[serverTable][field]
@@ -333,7 +336,7 @@ export function emptyCriterion (): any {
 }
 
 export function emptyComponent (sequence = 1): any {
-  return { component_type: 0, sequence, component_id: sequence, description: '', description_2: '', presentation_count: 1, criteria: [] }
+  return { component_type: 0, sequence, component_id: sequence, name: '', description: '', presentation_count: 1, criteria: [] }
 }
 
 export function emptyReward (sequence = 1, rewardID?: number): any {
@@ -351,16 +354,16 @@ export function emptyDefinition (id = 0): any {
     description: '',
     icon_id: 0,
     points: 0,
-    reward_display: 0,
-    world_display_flag: 0,
-    definition_version: 1,
+    has_reward: false,
+    client_flag: 0,
+    version: 0,
     reset_on_version_change: false,
     enabled: false,
     associations: [],
     components: [],
     rewards: [],
     reward_set: null,
-    restrictions: []
+    requirements: []
   }
 }
 
@@ -373,9 +376,9 @@ export function normalizeDefinition (raw: any): any {
     description: stringValue(source.description),
     icon_id: numberValue(source.icon_id),
     points: numberValue(source.points),
-    reward_display: numberValue(source.reward_display),
-    world_display_flag: numberValue(source.world_display_flag),
-    definition_version: numberValue(source.definition_version, 1),
+    has_reward: boolValue(source.has_reward),
+    client_flag: numberValue(source.client_flag),
+    version: numberValue(source.version),
     reset_on_version_change: boolValue(source.reset_on_version_change),
     enabled: boolValue(source.enabled)
   })
@@ -392,8 +395,8 @@ export function normalizeDefinition (raw: any): any {
       component_type: componentType,
       sequence: componentSequence,
       component_id: componentID,
+      name: stringValue(component.name),
       description: stringValue(component.description),
-      description_2: stringValue(component.description_2),
       presentation_count: numberValue(component.presentation_count, 1),
       recovery_only: boolValue(component.recovery_only),
       recovery_action: stringValue(component.recovery_action),
@@ -429,6 +432,9 @@ export function normalizeDefinition (raw: any): any {
     reward_set_id: numberValue(source.reward_set.reward_set_id),
     title: stringValue(source.reward_set.title),
     enabled: boolValue(source.reward_set.enabled),
+    source_enabled: boolValue(source.reward_set.source_enabled),
+    shared: boolValue(source.reward_set.shared),
+    source_count: numberValue(source.reward_set.source_count),
     options: (source.reward_set.options || []).map((option: any) => ({
       option_id: numberValue(option.option_id),
       sequence: numberValue(option.sequence),
@@ -439,11 +445,18 @@ export function normalizeDefinition (raw: any): any {
     })),
     mappings: (source.reward_set.mappings || []).map((mapping: any) => ({
       option_id: numberValue(mapping.option_id),
+      sequence: (() => {
+        const token = stringValue(mapping.reward_id)
+        const reward = token.charAt(0) === '@'
+          ? (source.rewards || [])[Number(token.slice(1))]
+          : (source.rewards || []).find((row: any) => stringValue(row.reward_id) === token)
+        return numberValue(reward && reward.sequence, numberValue(mapping.sequence))
+      })(),
       reward_id: stringValue(mapping.reward_id)
     }))
     }
     : null
-  graph.restrictions = (source.restrictions || []).map((row: any) => ({
+  graph.requirements = (source.requirements || []).map((row: any) => ({
     restriction_id: numberValue(row.restriction_id),
     requires_completed: boolValue(row.requires_completed)
   }))
@@ -509,8 +522,9 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
   if (!Number.isInteger(graph.id) || graph.id <= 0 || graph.id > 4294967295) addIssue(issues, 'general.id', 'Achievement ID must be an integer from 1 through 4,294,967,295.')
   if (!graph.name.trim()) addIssue(issues, 'general.name', 'Name is required.')
   if (new Blob([graph.description]).size > limits.text_bytes) addIssue(issues, 'general.description', 'Achievement description may not exceed 65,535 UTF-8 bytes (the MySQL TEXT limit).')
-  if (!Number.isInteger(graph.definition_version) || graph.definition_version <= 0) addIssue(issues, 'general.definition_version', 'Definition version must be a positive integer.')
-  if (graph.icon_id < 0 || graph.points < 0 || graph.world_display_flag < 0) addIssue(issues, 'general', 'Icon, points, and world-display values cannot be negative.')
+  if (!Number.isInteger(graph.version) || graph.version < 0) addIssue(issues, 'general.version', 'Definition version must be an unsigned integer (0 is valid).')
+  if (graph.icon_id < 0 || graph.points < 0) addIssue(issues, 'general', 'Icon and points values cannot be negative.')
+  if (!Number.isInteger(graph.client_flag) || graph.client_flag < 0 || graph.client_flag > 255) addIssue(issues, 'general.client_flag', 'Client flag must be an unsigned 8-bit integer from 0 through 255.')
   if (graph.associations.length > limits.associations) addIssue(issues, 'categories', 'The graph exceeds the association limit of ' + limits.associations + '.')
   duplicateValues(graph.associations, row => String(row.category_id)).forEach(id => addIssue(issues, 'categories', 'Category ' + id + ' is associated more than once.'))
   graph.associations.forEach((row: any, index: number) => {
@@ -526,8 +540,8 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
   graph.components.forEach((component: any, componentIndex: number) => {
     const base = 'components.' + componentIndex
     criterionCount += component.criteria.length
-    if (new Blob([component.description]).size > limits.text_bytes) addIssue(issues, base + '.description', 'Component primary description may not exceed 65,535 UTF-8 bytes (the MySQL TEXT limit).')
-    if (new Blob([component.description_2]).size > limits.text_bytes) addIssue(issues, base + '.description_2', 'Component secondary description may not exceed 65,535 UTF-8 bytes (the MySQL TEXT limit).')
+    if (new Blob([component.name]).size > limits.text_bytes) addIssue(issues, base + '.name', 'Component name may not exceed 65,535 UTF-8 bytes (the MySQL TEXT limit).')
+    if (new Blob([component.description]).size > limits.text_bytes) addIssue(issues, base + '.description', 'Component description may not exceed 65,535 UTF-8 bytes (the MySQL TEXT limit).')
     if (component.recovery_only) {
       if (!['restore', 'delete'].includes(component.recovery_action)) addIssue(issues, base + '.recovery_action', 'Choose Restore missing component to preserve these rows, or Delete orphan criteria to remove them explicitly.')
       if (component.recovery_criteria_count !== component.criteria.length) addIssue(issues, base + '.recovery_criteria_count', 'Every stored orphan criterion must remain visible until the whole group is explicitly restored or deleted.')
@@ -554,7 +568,7 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
       if (criterionIdentities[criterionIdentity]) addIssue(issues, path + '.target_id', 'Event and target identity must be unique within this component.')
       criterionIdentities[criterionIdentity] = true
       if ([1, 10].includes(criterion.event_type) && (criterion.target_id !== 0 || criterion.target_id2 !== 0)) addIssue(issues, path, 'This event requires both target ID fields to be 0.')
-      if ([0, 2, 3, 5, 6, 8, 9, 11].includes(criterion.event_type) && criterion.target_id2 !== 0) addIssue(issues, path + '.target_id2', 'This event requires the secondary target to be 0.')
+      if (![7, 12, 13].includes(criterion.event_type) && criterion.target_id2 !== 0) addIssue(issues, path + '.target_id2', 'This event requires the secondary target to be 0.')
       if (criterion.event_type === 4 && criterion.target_id <= 0) addIssue(issues, path + '.target_id', 'Task Complete requires a nonzero task ID.')
       if (criterion.event_type === 9 && !((criterion.target_id >= 0 && criterion.target_id <= 77) || criterion.target_id === 4294967295)) addIssue(issues, path + '.target_id', 'Skill ID must be canonical 0-77, or 4,294,967,295 for wildcard.')
       if (criterion.event_type === 13 && (criterion.target_id < 0 || criterion.target_id > 77)) addIssue(issues, path + '.target_id', 'Skill ID must be canonical 0-77.')
@@ -580,16 +594,14 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
   if (new Set(requiredClasses).size > 1) addIssue(issues, 'components', 'Required, Unlock, and Visibility class criteria must agree on one EQ class.')
   if (graph.rewards.length > limits.rewards) addIssue(issues, 'rewards', 'The graph exceeds the reward limit of ' + limits.rewards + '.')
   duplicateValues(graph.rewards.filter((row: any) => String(row.reward_id).trim() !== ''), row => String(row.reward_id)).forEach(id => addIssue(issues, 'rewards', 'Reward ID ' + id + ' is duplicated.'))
-  duplicateValues(graph.rewards, row => String(row.sequence)).forEach(sequence => addIssue(issues, 'rewards', 'Reward sequence ' + sequence + ' is duplicated.'))
   graph.rewards.forEach((reward: any, index: number) => {
     const path = 'rewards.' + index
-    if (String(reward.reward_id).trim() !== '' && !validUnsignedDecimal(reward.reward_id)) addIssue(issues, path + '.reward_id', 'Persisted reward ID must be a positive unsigned BIGINT decimal string.')
-    if (reward.enabled && String(reward.reward_id).trim() !== '' && !decimalFitsUint32(reward.reward_id)) addIssue(issues, path + '.reward_id', 'Enabled persisted reward IDs must fit the unsigned 32-bit client wire field.')
+    if (String(reward.reward_id).trim() !== '' && (!validUnsignedDecimal(reward.reward_id) || !decimalFitsUint32(reward.reward_id))) addIssue(issues, path + '.reward_id', 'Persisted reward ID must be a positive unsigned 32-bit decimal string.')
     if (!Number.isInteger(reward.sequence) || reward.sequence < 0) addIssue(issues, path + '.sequence', 'Reward sequence must be a non-negative integer.')
-    if (reward.reward_type < 0 || reward.reward_type > 5) addIssue(issues, path + '.reward_type', 'Reward type must be supported.')
+    if (reward.reward_type < 0 || reward.reward_type > 7) addIssue(issues, path + '.reward_type', 'Reward type must be supported from 0 through 7.')
     const amountValid = validUnsignedDecimal(reward.amount)
     if (!amountValid) addIssue(issues, path + '.amount', 'Reward amount must be a positive unsigned BIGINT value.')
-    if (reward.enabled && [0, 4, 5].includes(reward.reward_type) && reward.reward_data_id <= 0) addIssue(issues, path + '.reward_data_id', 'This enabled reward type requires a nonzero referenced data ID.')
+    if (reward.enabled && [0, 4, 5, 6, 7].includes(reward.reward_type) && reward.reward_data_id <= 0) addIssue(issues, path + '.reward_data_id', 'This enabled reward type requires a nonzero referenced data ID.')
     if (reward.reward_type === 1 && reward.reward_data_id > 1) addIssue(issues, path + '.reward_data_id', 'Experience mode must be 0 for normal handling or 1 for normal-only raw XP.')
     const deliveryFindingLevel = graph.enabled ? 'error' : 'warning'
     if (reward.enabled && amountValid && reward.reward_type === 0 && !decimalFitsMaximum(reward.amount, '32767')) addIssue(issues, path + '.amount', 'Item reward amount cannot exceed 32,767, the runtime item-summon limit.', deliveryFindingLevel)
@@ -601,17 +613,19 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
     if (reward.enabled && amountValid && reward.reward_type === 4 && !decimalFitsMaximum(reward.amount, '2147483647')) addIssue(issues, path + '.amount', 'Alternate-currency reward amount cannot exceed 2,147,483,647.', deliveryFindingLevel)
     if (reward.enabled && reward.reward_type === 5 && reward.reward_data_id > 2147483647) addIssue(issues, path + '.reward_data_id', 'Title-set ID cannot exceed 2,147,483,647, the runtime signed title limit.', deliveryFindingLevel)
     if (reward.enabled && amountValid && reward.reward_type === 5 && normalizedUnsignedDecimal(reward.amount) !== '1') addIssue(issues, path + '.amount', 'Title rewards must use amount 1; the title set is unlocked once.', deliveryFindingLevel)
+    if (reward.enabled && amountValid && reward.reward_type === 6 && !decimalFitsMaximum(reward.amount, '2147483647')) addIssue(issues, path + '.amount', 'Alternate Advancement ability desired rank cannot exceed 2,147,483,647.', deliveryFindingLevel)
+    if (reward.enabled && amountValid && reward.reward_type === 7 && !decimalFitsMaximum(reward.amount, '2147483647')) addIssue(issues, path + '.amount', 'Class-ineligible Alternate Advancement fallback cannot exceed 2,147,483,647 AA points.', deliveryFindingLevel)
   })
   if (graph.reward_set) {
     const set = graph.reward_set
     if (set.reward_set_id <= 0) addIssue(issues, 'reward_set.reward_set_id', 'Selectable reward set ID must be positive.')
-    if (set.enabled && !graph.enabled) addIssue(issues, 'reward_set.enabled', 'Disable the selectable reward set before disabling its achievement; an enabled set owned by a disabled definition makes the runtime snapshot fail to load.')
     if (set.options.length > limits.options) addIssue(issues, 'reward_set.options', 'The graph exceeds the reward option limit of ' + limits.options + '.')
     duplicateValues(set.options, row => String(row.option_id)).forEach(id => addIssue(issues, 'reward_set.options', 'Option ID ' + id + ' is duplicated.'))
     duplicateValues(set.options, row => String(row.sequence)).forEach(sequence => addIssue(issues, 'reward_set.options', 'Option sequence ' + sequence + ' is duplicated; the client will break the tie by option ID.', 'warning'))
     const optionIDs = set.options.map((row: any) => String(row.option_id))
     const rewardIDs = graph.rewards.map((row: any, index: number) => String(row.reward_id || ('@' + index)))
     duplicateValues(set.mappings, row => String(row.reward_id)).forEach(id => addIssue(issues, 'reward_set.mappings', 'Reward ' + id + ' is mapped to more than one option.'))
+    duplicateValues(set.mappings, row => String(row.option_id) + ':' + String(row.sequence)).forEach(key => addIssue(issues, 'reward_set.mappings', 'Multiple grants use option/order ' + key + '; reward ID breaks the tie.', 'warning'))
     set.mappings.forEach((mapping: any, mappingIndex: number) => {
       if (!optionIDs.includes(String(mapping.option_id))) addIssue(issues, 'reward_set.mappings', 'A mapping references missing option ' + mapping.option_id + '.')
       if (!rewardIDs.includes(String(mapping.reward_id))) addIssue(issues, 'reward_set.mappings', 'A mapping references missing reward ' + mapping.reward_id + '.')
@@ -620,12 +634,15 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
       const reward = token.charAt(0) === '@'
         ? graph.rewards[Number(token.slice(1))]
         : graph.rewards.find((row: any) => String(row.reward_id) === token)
-      if (graph.enabled && reward && reward.enabled && (!set.enabled || !option || !option.enabled)) {
-        addIssue(issues, 'reward_set.mappings.' + mappingIndex, 'This enabled reward is excluded from automatic delivery by its mapping, but its selectable set or option is disabled. Enable the set and option, disable the reward, or remove the mapping.')
+      if (graph.enabled && reward && reward.enabled && (!set.source_enabled || !set.enabled || !option || !option.enabled)) {
+        addIssue(issues, 'reward_set.mappings.' + mappingIndex, 'This enabled reward is excluded from automatic delivery by its mapping, but its source link, selectable set, or option is disabled. Enable the reachable path, disable the reward, or remove the mapping.')
       }
     })
-    if (set.enabled && !set.options.some((row: any) => row.enabled && !row.common_to_all)) addIssue(issues, 'reward_set.options', 'An enabled selectable set needs at least one enabled non-common choice.')
-    if (set.enabled) {
+    const mappedRewardIDs = new Set(set.mappings.map((mapping: any) => String(mapping.reward_id)))
+    const automaticRewards = graph.rewards.filter((reward: any, index: number) => !mappedRewardIDs.has(String(reward.reward_id || ('@' + index))))
+    duplicateValues(automaticRewards, row => String(row.sequence)).forEach(sequence => addIssue(issues, 'rewards', 'Automatic grant order ' + sequence + ' is duplicated; reward_source_entries requires unique source order.'))
+    if (graph.enabled && set.source_enabled && set.enabled && !set.options.some((row: any) => row.enabled && !row.common_to_all)) addIssue(issues, 'reward_set.options', 'An enabled selectable source needs at least one enabled non-common choice.')
+    if (graph.enabled && set.source_enabled && set.enabled) {
       set.options.filter((row: any) => row.enabled).forEach((option: any) => {
         const hasGrant = set.mappings.some((mapping: any) => {
           if (String(mapping.option_id) !== String(option.option_id)) return false
@@ -638,13 +655,39 @@ export function validateDefinition (raw: any, metadata: any = FALLBACK_METADATA)
         if (!hasGrant) addIssue(issues, 'reward_set.options', 'Enabled reward option ' + option.option_id + ' has no enabled grant.')
       })
     }
+  } else {
+    duplicateValues(graph.rewards, row => String(row.sequence)).forEach(sequence => addIssue(issues, 'rewards', 'Automatic grant order ' + sequence + ' is duplicated; reward_source_entries requires unique source order.'))
   }
-  if (graph.restrictions.length > limits.restrictions) addIssue(issues, 'restrictions', 'The graph exceeds the cast restriction limit of ' + limits.restrictions + '.')
-  duplicateValues(graph.restrictions, row => String(row.restriction_id)).forEach(id => addIssue(issues, 'restrictions', 'Restriction ID ' + id + ' is duplicated; duplicate or contradictory rows are unsafe.'))
-  graph.restrictions.forEach((row: any, index: number) => {
-    if (!Number.isInteger(row.restriction_id) || row.restriction_id <= 0) addIssue(issues, 'restrictions.' + index + '.restriction_id', 'Restriction ID must be a positive integer.')
+  const mappedRewardTokens = new Set<string>(graph.reward_set ? graph.reward_set.mappings.map((mapping: any) => String(mapping.reward_id)) : [])
+  const automaticAAPairs = new Map<number, { primary: number, fallback: number }>()
+  graph.rewards.forEach((reward: any, index: number) => {
+    if (!reward.enabled) return
+    const token = String(reward.reward_id || ('@' + index))
+    const mapped = mappedRewardTokens.has(token)
+    if (reward.reward_type === 7 && mapped) {
+      addIssue(issues, 'rewards.' + index + '.reward_type', 'Class-ineligible Alternate Advancement fallbacks are valid only as direct automatic achievement rewards and cannot be mapped to a selectable option.', graph.enabled ? 'error' : 'warning')
+    }
+    if (mapped || ![6, 7].includes(reward.reward_type)) return
+    const pair = automaticAAPairs.get(Number(reward.reward_data_id)) || { primary: 0, fallback: 0 }
+    if (reward.reward_type === 6) pair.primary++
+    else pair.fallback++
+    automaticAAPairs.set(Number(reward.reward_data_id), pair)
   })
-  const payloadBytes = new Blob([JSON.stringify(graph)]).size + GRAPH_MUTATION_ENVELOPE_RESERVE_BYTES
+  graph.rewards.forEach((reward: any, index: number) => {
+    if (!reward.enabled || reward.reward_type !== 7) return
+    const token = String(reward.reward_id || ('@' + index))
+    if (mappedRewardTokens.has(token)) return
+    const pair = automaticAAPairs.get(Number(reward.reward_data_id)) || { primary: 0, fallback: 0 }
+    if (pair.primary !== 1 || pair.fallback !== 1) {
+      addIssue(issues, 'rewards.' + index + '.reward_type', 'This automatic class-ineligible AA fallback requires exactly one enabled automatic type 6 primary and exactly one enabled automatic type 7 fallback for AA ability ' + reward.reward_data_id + '; found ' + pair.primary + ' primary and ' + pair.fallback + ' fallback.', graph.enabled ? 'error' : 'warning')
+    }
+  })
+  if (graph.requirements.length > limits.requirements) addIssue(issues, 'requirements', 'The graph exceeds the cast restriction limit of ' + limits.requirements + '.')
+  duplicateValues(graph.requirements, row => String(row.restriction_id)).forEach(id => addIssue(issues, 'requirements', 'Restriction ID ' + id + ' is duplicated; duplicate or contradictory rows are unsafe.'))
+  graph.requirements.forEach((row: any, index: number) => {
+    if (!Number.isInteger(row.restriction_id) || row.restriction_id <= 0) addIssue(issues, 'requirements.' + index + '.restriction_id', 'Restriction ID must be a positive integer.')
+  })
+  const payloadBytes = new Blob([JSON.stringify(graph)]).size + GRAPH_UPDATE_ENVELOPE_RESERVE_BYTES
   if (payloadBytes > limits.payload_bytes) addIssue(issues, 'graph', 'The graph and its safety envelope exceed the ' + limits.payload_bytes + '-byte UTF-8 request limit.')
   return issues
 }
@@ -655,58 +698,75 @@ export function definitionSnapshot (graph: any): string {
 
 export function runtimePolicySnapshot (raw: any): string {
   const graph = normalizeDefinition(raw)
-  const enabledRewards = graph.rewards.filter((reward: any) => reward.enabled)
-  const enabledRewardIDs = new Set<string>()
+  const runtimeSort = (left: any, right: any): number => JSON.stringify(left).localeCompare(JSON.stringify(right))
+  const rewardIdentity = (reward: any): string => {
+    const persisted = String(reward.reward_id || '').trim()
+    if (persisted) return persisted
+    return '@new:' + JSON.stringify([Number(reward.reward_type), Number(reward.reward_data_id), String(reward.amount)])
+  }
+  const enabledRewardTokens = new Set<string>()
+  const canonicalRewardIDs = new Map<string, string>()
   graph.rewards.forEach((reward: any, index: number) => {
     if (!reward.enabled) return
-    enabledRewardIDs.add(String(reward.reward_id))
-    enabledRewardIDs.add('@' + index)
+    const persisted = String(reward.reward_id || '').trim()
+    const transient = '@' + index
+    const canonical = rewardIdentity(reward)
+    if (persisted) {
+      enabledRewardTokens.add(persisted)
+      canonicalRewardIDs.set(persisted, canonical)
+    }
+    enabledRewardTokens.add(transient)
+    canonicalRewardIDs.set(transient, canonical)
   })
-  const enabledOptions = graph.reward_set && graph.reward_set.enabled
+  const enabledOptions = graph.reward_set && graph.reward_set.source_enabled && graph.reward_set.enabled
     ? graph.reward_set.options.filter((option: any) => option.enabled)
     : []
   const enabledOptionIDs = new Set(enabledOptions.map((option: any) => Number(option.option_id)))
-  return JSON.stringify({
-    reset_on_version_change: graph.reset_on_version_change,
-    components: graph.components.filter((component: any) => (!component.recovery_only || component.recovery_action === 'restore') && Number(component.component_type) <= 2 && component.criteria.some((criterion: any) => criterion.enabled)).map((component: any) => ({
+  const components = graph.components.filter((component: any) => (!component.recovery_only || component.recovery_action === 'restore') && Number(component.component_type) <= 2 && component.criteria.some((criterion: any) => criterion.enabled)).map((component: any) => ({
+    component_type: component.component_type,
+    component_id: component.component_id,
+    criteria: component.criteria.filter((criterion: any) => criterion.enabled).map((criterion: any) => ({
       component_type: component.component_type,
       component_id: component.component_id,
-      criteria: component.criteria.filter((criterion: any) => criterion.enabled).map((criterion: any) => ({
-        component_type: component.component_type,
-        component_id: component.component_id,
-        event_type: criterion.event_type,
-        progress_mode: criterion.progress_mode,
-        behavior: criterion.behavior,
-        target_id: criterion.target_id,
-        target_id2: criterion.target_id2,
-        target_value: criterion.target_value,
-        required_count: criterion.required_count
-      }))
-    })),
-    rewards: enabledRewards.map((reward: any) => ({
-      reward_id: reward.reward_id,
-      reward_type: reward.reward_type,
-      reward_data_id: reward.reward_data_id,
-      amount: reward.amount
-    })),
-    mapped_rewards: graph.reward_set
-      ? graph.reward_set.mappings.filter((mapping: any) => enabledRewardIDs.has(String(mapping.reward_id))).map((mapping: any) => ({
-        option_id: mapping.option_id,
-        reward_id: mapping.reward_id
-      }))
-      : [],
-    reward_set: graph.reward_set && graph.reward_set.enabled
+      event_type: criterion.event_type,
+      progress_mode: criterion.progress_mode,
+      behavior: criterion.behavior,
+      target_id: criterion.target_id,
+      target_id2: criterion.target_id2,
+      target_value: criterion.target_value,
+      required_count: criterion.required_count
+    })).sort(runtimeSort)
+  })).sort(runtimeSort)
+  const rewards = graph.rewards.filter((reward: any) => reward.enabled).map((reward: any) => ({
+    reward_id: rewardIdentity(reward),
+    reward_type: reward.reward_type,
+    reward_data_id: reward.reward_data_id,
+    amount: reward.amount
+  })).sort(runtimeSort)
+  const mappedRewards = graph.reward_set
+    ? graph.reward_set.mappings.filter((mapping: any) => enabledRewardTokens.has(String(mapping.reward_id))).map((mapping: any) => ({
+      option_id: mapping.option_id,
+      reward_id: canonicalRewardIDs.get(String(mapping.reward_id))
+    })).sort(runtimeSort)
+    : []
+  return JSON.stringify({
+    reset_on_version_change: graph.reset_on_version_change,
+    reward_source_enabled: Boolean(graph.reward_set && graph.reward_set.source_enabled),
+    components,
+    rewards,
+    mapped_rewards: mappedRewards,
+    reward_set: graph.reward_set && graph.reward_set.source_enabled && graph.reward_set.enabled
       ? {
         reward_set_id: graph.reward_set.reward_set_id,
         options: enabledOptions.map((option: any) => ({
           option_id: option.option_id,
           common_to_all: option.common_to_all,
           flags: option.flags
-        })),
-        mappings: graph.reward_set.mappings.filter((mapping: any) => enabledOptionIDs.has(Number(mapping.option_id)) && enabledRewardIDs.has(String(mapping.reward_id))).map((mapping: any) => ({
+        })).sort(runtimeSort),
+        mappings: graph.reward_set.mappings.filter((mapping: any) => enabledOptionIDs.has(Number(mapping.option_id)) && enabledRewardTokens.has(String(mapping.reward_id))).map((mapping: any) => ({
           option_id: mapping.option_id,
-          reward_id: mapping.reward_id
-        }))
+          reward_id: canonicalRewardIDs.get(String(mapping.reward_id))
+        })).sort(runtimeSort)
       }
       : null
   })
