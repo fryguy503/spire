@@ -1,4 +1,4 @@
-## [Unreleased] (Beta) 8/21/2026
+## [5.7.0] (Beta) 8/21/2026
 
 * Updated the achievement definition and character achievement editors for the final shared reward schema, with safer shared-catalog preservation, validation, concurrency handling, and reward recovery.
 * Bounded achievement validation and reference queries so large content catalogs remain responsive and fail safely.
