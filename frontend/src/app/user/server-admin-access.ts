@@ -118,7 +118,7 @@ export const serverAdminTools: AdminTool[] = [
 export function canAccessAdminRoute (url: string): boolean {
   const path = url.split(/[?#]/)[0].replace(/\/$/, '').toLowerCase()
   if (path === ROUTE.ADMIN_ROOT) return dashboardApis.some(canReadAdminApi)
-  if (/^\/admin\/zoneservers\/[^/]+\/logs$/.test(path) || path === '/admin/ws-poc') {
+  if (/^\/admin\/zoneservers\/[^/]+\/logs$/.test(path)) {
     return canReadAdminApi('eqemuserver/get-websocket-auth')
   }
   const tool = serverAdminTools.find(tool => tool.path === path)

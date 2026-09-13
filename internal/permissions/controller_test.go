@@ -17,7 +17,7 @@ import (
 func TestCurrentPermissionsRequiresAuthentication(t *testing.T) {
 	e := echo.New()
 	context := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/permissions/me", nil), httptest.NewRecorder())
-	err := (&Controller{}).getCurrentPermissions(context)
+	err := (&CurrentUserController{}).getCurrentPermissions(context)
 	if httpError, ok := err.(*echo.HTTPError); !ok || httpError.Code != http.StatusUnauthorized {
 		t.Fatalf("getCurrentPermissions() error = %v, want 401", err)
 	}
@@ -53,7 +53,7 @@ func TestCurrentPermissionsUsesActiveConnectionACL(t *testing.T) {
 			tc.grants.connectionID = tc.connection
 			cache.Set("user-permissions-2", tc.grants, gocache.NoExpiration)
 			resolver := database.NewResolver(nil, nil, nil, cache)
-			controller := NewController(resolver, &Service{cache: cache})
+			controller := NewCurrentUserController(resolver, &Service{cache: cache})
 			e := echo.New()
 			recorder := httptest.NewRecorder()
 			// Query parameters cannot select another user's permissions.

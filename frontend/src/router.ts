@@ -209,11 +209,6 @@ const router = new Router({
           meta: {title: "QGlobals"},
         },
         {
-          path: ROUTE.ADMIN_CHAT_ADMINISTRATION,
-          component: () => import('./views/admin/chat-administration/ChatAdministration.vue'),
-          meta: {title: "Chat Administration"},
-        },
-        {
           path: ROUTE.ZONES,
           component: () => import('./views/zone/Zones.vue'),
           meta: {title: "Zones"},
@@ -492,8 +487,7 @@ const router = new Router({
         },
         {
           path: '/admin/ws-poc',
-          component: () => import('./views/admin/WebsocketPoc.vue'),
-          meta: {title: "Websocket POC"},
+          redirect: ROUTE.ADMIN_ROOT,
         },
       ]
     },

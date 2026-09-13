@@ -142,6 +142,49 @@ const scopedPermissions = (read: string[] = [], write: string[] = []) => ({
   connection_id: 1, read_all: false, write_all: false, read, write,
 });
 
+for (const path of ['/admin/chat-administration', '/ADMIN/CHAT-ADMINISTRATION']) {
+  test(`Chat Administration rejects an unpermitted direct URL: ${path}`, async ({ page }) => {
+    await mockServer(page, { permissions: scopedPermissions() });
+    const requests: string[] = [];
+    page.on('request', request => {
+      if (request.url().includes('/api/v1/chat-administration/')) requests.push(request.url());
+    });
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: 'Chat Administration' })).toHaveCount(0);
+    expect(requests).toEqual([]);
+  });
+
+  test(`permitted Chat Administration uses the admin layout: ${path}`, async ({ page }) => {
+    await mockServer(page, { permissions: scopedPermissions(['chat-administration']) });
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Chat Administration' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Editing Tools Home$/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Server Config$/ })).toHaveCount(0);
+  });
+}
+
+for (const authEnabled of [true, false]) {
+  test(`the retired websocket launcher is unavailable with auth ${authEnabled ? 'enabled' : 'disabled'}`, async ({ page }) => {
+    await mockServer(page, {
+      authEnabled,
+      permissions: { ...scopedPermissions(), read_all: true },
+    });
+    await page.goto('/admin/ws-poc');
+    await expect(page).toHaveURL(/\/admin\/?$/);
+    await expect(page.getByText('Server Processes', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Websocket Proof of Concept' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Run World|Run Zone|Run Loginsever|Run UCS/ })).toHaveCount(0);
+  });
+}
+
+test('the retired websocket URL still respects a user with no grants', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions() });
+  await page.goto('/admin/ws-poc');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('button', { name: /Run World|Run Zone/ })).toHaveCount(0);
+});
+
 test('mixed-case admin URLs cannot bypass the permission guard', async ({ page }) => {
   await mockServer(page, { permissions: scopedPermissions() });
   let variableRequests = 0;
