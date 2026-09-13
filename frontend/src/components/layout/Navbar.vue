@@ -71,7 +71,7 @@
       </div>
 
       <div class="collapse navbar-collapse" id="sidebarCollapse">
-        <div v-if="isAppLocal()">
+        <div v-if="isAppLocal() && canAccessServerAdmin()">
           <h6 class="navbar-heading mt-3">
             Admin
           </h6>
@@ -270,6 +270,7 @@ import {App}                  from "@/constants/app";
 import NavbarDropdownMenu     from "@/components/layout/NavbarDropdownMenu";
 import NavbarUserSettingsCog  from "@/components/layout/NavbarUserSettingsCog";
 import UserContext            from "@/app/user/UserContext";
+import {canAccessServerAdmin} from "@/app/user/server-admin-access";
 import NavSectionComponent    from "@/components/layout/NavSectionComponent";
 import {ROUTE}                from "@/routes";
 import {EventBus}             from "@/app/event-bus/event-bus";
@@ -794,7 +795,7 @@ export default {
         if (n.label && n.to) {
           let adminPanelRouteEnabled = false
           if (n.to.includes(ROUTE.ADMIN_ROOT)) {
-            if (AppEnv.isLocalAuthEnabled() && !UserContext.isAdmin()) {
+            if (!this.canAccessServerAdmin()) {
               continue;
             }
             adminPanelRouteEnabled = true
@@ -815,7 +816,7 @@ export default {
           for (let c of n.navs) {
             let adminPanelRouteEnabled = false
             if (c.to.includes(ROUTE.ADMIN_ROOT)) {
-              if (AppEnv.isLocalAuthEnabled() && !UserContext.isAdmin()) {
+              if (!this.canAccessServerAdmin()) {
                 continue;
               }
               adminPanelRouteEnabled = true
@@ -902,6 +903,10 @@ export default {
       return this.user && this.user.is_admin
     },
 
+    canAccessServerAdmin() {
+      return canAccessServerAdmin(this.user)
+    },
+
     isLocalHost() {
       const h = window.location.hostname;
       return h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') || h.startsWith('10.');
@@ -963,6 +968,7 @@ export default {
       this.isBetaRelease = AppEnv.isBetaRelease();
       this.updateChannel = AppEnv.getUpdateChannel();
       this.appFeatures = AppEnv.getFeatures();
+      this.parseNinjaKeys();
     },
     handleBetaReleaseChanged(isBetaRelease) {
       this.isBetaRelease = isBetaRelease === true;

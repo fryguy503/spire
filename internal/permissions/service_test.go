@@ -5,8 +5,52 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/EQEmuTools/spire/internal/models"
 	"github.com/labstack/echo/v4"
+	gocache "github.com/patrickmn/go-cache"
 )
+
+func TestConnectionPermissionsWithoutInstanceAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		method      string
+		permissions userPermissions
+		want        bool
+	}{
+		{name: "all read", method: http.MethodGet, permissions: userPermissions{canReadAll: true}, want: true},
+		{name: "all write", method: http.MethodPut, permissions: userPermissions{canWriteAll: true}, want: true},
+		{name: "read only cannot write", method: http.MethodPut, permissions: userPermissions{canReadAll: true}},
+		{name: "write only cannot read", method: http.MethodGet, permissions: userPermissions{canWriteAll: true}},
+		{name: "no grants cannot read", method: http.MethodGet},
+		{name: "connection owner", method: http.MethodPut, permissions: userPermissions{isConnectionOwner: true}, want: true},
+		{
+			name: "scoped server read", method: http.MethodGet, want: true,
+			permissions: userPermissions{permissions: []Resource{{
+				RouteMatchPrefixes: []string{"admin/serverconfig"}, CanRead: true,
+			}}},
+		},
+		{
+			name: "unrelated grant cannot read", method: http.MethodGet,
+			permissions: userPermissions{permissions: []Resource{{
+				RouteMatchPrefixes: []string{"items"}, CanRead: true, CanWrite: true,
+			}}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := gocache.New(gocache.NoExpiration, 0)
+			// Seed the same permission cache used after resolving a connection.
+			cache.Set("user-permissions-2", tc.permissions, gocache.NoExpiration)
+			service := &Service{cache: cache}
+			e := echo.New()
+			request := httptest.NewRequest(tc.method, "/api/v1/admin/serverconfig", nil)
+			context := e.NewContext(request, httptest.NewRecorder())
+			user := models.User{ID: 2, IsAdmin: false}
+			if got := service.CanAccessResource(context, user, 1); got != tc.want {
+				t.Errorf("CanAccessResource() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestIsWriteRequestIncludesDelete(t *testing.T) {
 	service := &Service{}

@@ -7,6 +7,7 @@ import {EventBus} from "@/app/event-bus/event-bus";
 import qs from "qs";
 import {scrollToHash} from "@/app/utility/scrollToTarget";
 import UserContext from "@/app/user/UserContext";
+import {canAccessServerAdmin} from "@/app/user/server-admin-access";
 
 Vue.use(Router)
 
@@ -545,16 +546,22 @@ router.beforeEach(async (to, from, next) => {
     AppEnv.routeCheckSpireInitialized(to, router)
   }
 
-  // Admin route guard: require authenticated admin user (only when auth is configured)
+  // Load auth settings before checking direct entries to an admin route.
   if (to.path.startsWith('/admin')) {
-    const authEnabled = AppEnv.isLocalAuthEnabled() || AppEnv.isGithubAuthEnabled();
-    if (authEnabled) {
-      const user = await UserContext.getUser();
-      if (!user || !user.is_admin) {
-        EventBus.$emit('ROUTE_CHANGE', to);
+    if (typeof AppEnv.getEnv() === 'undefined') {
+      try {
+        await AppEnv.init();
+      } catch {
         next({ path: '/', replace: true });
         return;
       }
+    }
+
+    const authEnabled = AppEnv.isLocalAuthEnabled() || AppEnv.isGithubAuthEnabled();
+    const user = authEnabled ? await UserContext.getUser() : null;
+    if (!canAccessServerAdmin(user)) {
+      next({ path: '/', replace: true });
+      return;
     }
   }
 
