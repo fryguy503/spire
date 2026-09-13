@@ -49,14 +49,14 @@
           <tr>
             <th class="text-right" style="width: 200px">(ID) Event Name</th>
             <th style="width: 140px">Event<br>Enabled</th>
-            <th style="width: 140px">ETL<br>Enabled</th>
+            <th v-if="canRead('eqemuserver/player-event-logs/etl-settings')" style="width: 140px">ETL<br>Enabled</th>
             <th style="width: 400px">
               Retention Days
               <small class="text-muted d-block">
                 Determines how long in days that these events are kept in the database before world automatically truncates them
               </small>
             </th>
-            <th>
+            <th v-if="canRead('discord_webhooks')">
               <router-link
                 style="color: #8aa3ff"
                 :to="ROUTE.ADMIN_DISCORD_WEBHOOK_SETTINGS"
@@ -90,7 +90,7 @@
                 />
               </div>
             </td>
-            <td>
+            <td v-if="canRead('eqemuserver/player-event-logs/etl-settings')">
               <div class="d-inline-block mr-3">
                 <eq-checkbox
                   v-if="etlSettings[s.id]"
@@ -121,6 +121,7 @@
             </td>
 
             <td
+              v-if="canRead('discord_webhooks')"
               :style="(s.log_to_discord > 0 && s.discord_webhook_id === 0 ? 'color: red' : '')"
               :title="(s.log_to_discord > 0 && s.discord_webhook_id === 0 ? 'Webhook needs to be assigned' : '')"
             >
@@ -152,6 +153,7 @@
 </template>
 
 <script>
+import {canReadAdminApi, canWriteAdminApi} from "@/app/user/server-admin-access";
 import EqWindow                   from "@/components/eq-ui/EQWindow.vue";
 import {SpireApi}                 from "@/app/api/spire-api";
 import {LogsysCategoryApi}        from "@/app/api/api/logsys-category-api";
@@ -183,19 +185,20 @@ export default {
   },
   async mounted() {
     this.loadQueryState()
-    this.getEtlSettings()
+    if (this.canRead('eqemuserver/player-event-logs/etl-settings')) this.getEtlSettings()
 
     let r = await (new PlayerEventLogSettingApi(...SpireApi.cfg())).listPlayerEventLogSettings()
     if (r.status === 200) {
       this.settings = r.data
     }
 
-    r = await (new DiscordWebhookApi(...SpireApi.cfg())).listDiscordWebhooks()
-    if (r.status === 200) {
-      this.discordWebhooks = r.data
+    if (this.canRead('discord_webhooks')) {
+      r = await (new DiscordWebhookApi(...SpireApi.cfg())).listDiscordWebhooks()
+      if (r.status === 200) this.discordWebhooks = r.data
     }
   },
   methods: {
+    canRead: canReadAdminApi,
     filteredSettings(s) {
       return s.filter((e) => {
         if (this.search && this.search.length > 0) {
@@ -250,6 +253,7 @@ export default {
               )
           }, 1)
 
+          if (!canWriteAdminApi('eqemuserver/reload/logs')) return
           const r = await SpireApi.v1().post("eqemuserver/reload/logs")
           if (r.status === 200) {
             setTimeout(() => {

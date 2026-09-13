@@ -71,7 +71,7 @@
       </div>
 
       <div class="collapse navbar-collapse" id="sidebarCollapse">
-        <div v-if="isAppLocal()">
+        <div v-if="isAppLocal() && canAccessServerAdmin()">
           <h6 class="navbar-heading mt-3">
             Admin
           </h6>
@@ -85,7 +85,7 @@
 
             <template v-if="isInAdmin()">
               <nav-section-component
-                v-for="nav in adminNavs"
+                v-for="nav in permittedAdminNavs"
                 :key="nav.label"
                 :config="nav"
               />
@@ -270,6 +270,7 @@ import {App}                  from "@/constants/app";
 import NavbarDropdownMenu     from "@/components/layout/NavbarDropdownMenu";
 import NavbarUserSettingsCog  from "@/components/layout/NavbarUserSettingsCog";
 import UserContext            from "@/app/user/UserContext";
+import {canAccessServerAdmin, canAccessAdminRoute, refreshServerAdminAccess, serverAdminAccess, serverAdminLandingRoute} from "@/app/user/server-admin-access";
 import NavSectionComponent    from "@/components/layout/NavSectionComponent";
 import {ROUTE}                from "@/routes";
 import {EventBus}             from "@/app/event-bus/event-bus";
@@ -282,6 +283,17 @@ import semver                 from "semver";
 
 export default {
   computed: {
+    permittedAdminNavs() {
+      return this.adminNavs.map(nav => {
+        if (nav.to === ROUTE.ADMIN_ROOT) {
+          const to = serverAdminLandingRoute()
+          return to ? { ...nav, to } : null
+        }
+        if (nav.to) return canAccessAdminRoute(nav.to) ? nav : null
+        const navs = nav.navs.filter(child => canAccessAdminRoute(child.to))
+        return navs.length ? { ...nav, navs } : null
+      }).filter(Boolean)
+    },
     ROUTE() {
       return ROUTE
     },
@@ -750,6 +762,7 @@ export default {
     EventBus.$on("APP_BETA_RELEASE_PREVIEW_CHANGED", this.handleBetaReleasePreviewChanged);
     EventBus.$on("APP_UPDATE_CHANNEL_CHANGED", this.handleUpdateChannelChanged);
     EventBus.$on("ROUTE_CHANGE", this.handleRouteChange);
+    EventBus.$on("DB_CONNECTION_CHANGE", this.handleConnectionChange);
   },
   destroyed() {
     EventBus.$off("HIDE_NAVBAR", this.toggleNavbarCollapse);
@@ -758,6 +771,7 @@ export default {
     EventBus.$off("APP_BETA_RELEASE_PREVIEW_CHANGED", this.handleBetaReleasePreviewChanged);
     EventBus.$off("APP_UPDATE_CHANNEL_CHANGED", this.handleUpdateChannelChanged);
     EventBus.$off("ROUTE_CHANGE", this.handleRouteChange);
+    EventBus.$off("DB_CONNECTION_CHANGE", this.handleConnectionChange);
   },
 
   async mounted() {
@@ -794,7 +808,7 @@ export default {
         if (n.label && n.to) {
           let adminPanelRouteEnabled = false
           if (n.to.includes(ROUTE.ADMIN_ROOT)) {
-            if (AppEnv.isLocalAuthEnabled() && !UserContext.isAdmin()) {
+            if (!canAccessAdminRoute(n.to)) {
               continue;
             }
             adminPanelRouteEnabled = true
@@ -815,7 +829,7 @@ export default {
           for (let c of n.navs) {
             let adminPanelRouteEnabled = false
             if (c.to.includes(ROUTE.ADMIN_ROOT)) {
-              if (AppEnv.isLocalAuthEnabled() && !UserContext.isAdmin()) {
+              if (!canAccessAdminRoute(c.to)) {
                 continue;
               }
               adminPanelRouteEnabled = true
@@ -840,7 +854,7 @@ export default {
       let keys = []
 
       let navs = [
-        this.adminNavs,
+        this.permittedAdminNavs,
         [this.botNav],
         [this.itemNav],
         [this.npcNav],
@@ -879,11 +893,11 @@ export default {
 
 
       const ninja = document.querySelector('ninja-keys')
-      ninja.data  = keys
+      if (ninja) ninja.data = keys
     },
 
     isInAdmin() {
-      return this.$route.path.includes("/admin")
+      return this.$route.matched.some(route => route.path === ROUTE.ADMIN_ROOT)
     },
 
     getPartitionName() {
@@ -900,6 +914,10 @@ export default {
 
     isUserAdmin() {
       return this.user && this.user.is_admin
+    },
+
+    canAccessServerAdmin() {
+      return canAccessServerAdmin()
     },
 
     isLocalHost() {
@@ -957,12 +975,21 @@ export default {
     handleRouteChange() {
       this.setSidebarStyle()
     },
+    async handleConnectionChange() {
+      // Stop displaying the previous connection's tools while the new ACL loads.
+      serverAdminAccess.grants = null
+      await refreshServerAdminAccess()
+      if (this.isInAdmin() && !canAccessAdminRoute(this.$route.path)) {
+        this.$router.replace(serverAdminLandingRoute() || '/').catch(() => {})
+      }
+    },
     handleAppEnvLoaded() {
       this.appEnv      = AppEnv.getEnv();
       this.appVersion  = AppEnv.getVersion();
       this.isBetaRelease = AppEnv.isBetaRelease();
       this.updateChannel = AppEnv.getUpdateChannel();
       this.appFeatures = AppEnv.getFeatures();
+      this.parseNinjaKeys();
     },
     handleBetaReleaseChanged(isBetaRelease) {
       this.isBetaRelease = isBetaRelease === true;
@@ -1002,6 +1029,9 @@ export default {
     }
   },
   watch: {
+    permittedAdminNavs() {
+      this.parseNinjaKeys()
+    },
     $route(to, from) {
       this.hideNavbarAfterClick()
     }
