@@ -1,4 +1,14 @@
-## [5.6.1] (Beta) 9/3/2026
+## [Unreleased] 9/13/2026
+
+* Fixed Server Admin incorrectly redirecting authorized users back to Home.
+* Server Admin now shows only tools permitted by the active connection. The section is hidden entirely when no tools are accessible.
+* Dashboard information, server controls, and navigation search now respect connection permissions. Access refreshes when switching connections.
+* Fixed permission checks for direct Server Admin links and Chat Administration.
+* Added dedicated database-backup permissions and improved support for granting server process management without full access.
+* Fixed misleading permission errors after successfully saving rules, Discord webhooks, and logging settings. Automatic reloads now require reload permission.
+* Added Windows and Linux update scripts with documented commands. The scripts select the newest published version, including betas, and preserve a backup of the previous executable.
+
+## [5.6.1] 9/3/2026
 
 * Fix AA Editor rank chain sentinel handling
 
