@@ -74,10 +74,12 @@ func (s *Service) RegisterManualResources() map[string][]string {
 		"Server Dashboard Stats":   {"eqemuserver/dashboard-stats"},
 		"Server File Logs":         {"eqemuserver/log"},
 		"Server Manual Backup":     {"eqemuserver/manual-backup"},
+		"Server Database Backup":   {"backup/mysql"},
 		"Server Pre-Flight Checks": {"eqemuserver/pre-flight"},
 		"Server Reload API":        {"eqemuserver/reload"},
 		"Server Lock":              {"eqemuserver/get-lock-status", "eqemuserver/toggle-server-lock"},
 		"Server Process Management": {
+			"admin/launcherconfig",
 			"eqemuserver/server/start",
 			"eqemuserver/server/stop",
 			"eqemuserver/server/restart",
@@ -303,10 +305,40 @@ func (s *Service) GetResources(routes []*echo.Route) []Resource {
 // root permissions object for users when running through access control list logic
 // gets cached on first access
 type userPermissions struct {
+	connectionID      uint
 	isConnectionOwner bool
 	canReadAll        bool
 	canWriteAll       bool
 	permissions       []Resource
+}
+
+// Only route grants are exposed; ownership and ALL grants are folded into the
+// effective read/write flags used by the same ACL as the API middleware.
+type permissionSnapshot struct {
+	ConnectionID uint     `json:"connection_id"`
+	ReadAll      bool     `json:"read_all"`
+	WriteAll     bool     `json:"write_all"`
+	Read         []string `json:"read"`
+	Write        []string `json:"write"`
+}
+
+func (p userPermissions) snapshot(connectionID uint) permissionSnapshot {
+	result := permissionSnapshot{
+		ConnectionID: connectionID,
+		ReadAll:      p.isConnectionOwner || p.canReadAll,
+		WriteAll:     p.isConnectionOwner || p.canWriteAll,
+	}
+	for _, resource := range p.permissions {
+		if resource.CanRead {
+			result.Read = append(result.Read, resource.RouteMatchPrefixes...)
+		}
+		if resource.CanWrite {
+			result.Write = append(result.Write, resource.RouteMatchPrefixes...)
+		}
+	}
+	sort.Strings(result.Read)
+	sort.Strings(result.Write)
+	return result
 }
 
 func (s *Service) IsWriteRequest(c echo.Context) bool {
@@ -419,11 +451,12 @@ func (s *Service) getUserPermissions(c echo.Context, user models.User, connectio
 	// return cached if exist
 	cacheKey := fmt.Sprintf("user-permissions-%v", user.ID)
 	cached, found := s.cache.Get(cacheKey)
-	if found {
+	if found && cached.(userPermissions).connectionID == connectionId {
 		return cached.(userPermissions)
 	}
 
 	var p userPermissions
+	p.connectionID = connectionId
 
 	p.canReadAll = false
 	p.canWriteAll = false

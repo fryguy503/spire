@@ -85,7 +85,7 @@
 
             <template v-if="isInAdmin()">
               <nav-section-component
-                v-for="nav in adminNavs"
+                v-for="nav in permittedAdminNavs"
                 :key="nav.label"
                 :config="nav"
               />
@@ -270,7 +270,7 @@ import {App}                  from "@/constants/app";
 import NavbarDropdownMenu     from "@/components/layout/NavbarDropdownMenu";
 import NavbarUserSettingsCog  from "@/components/layout/NavbarUserSettingsCog";
 import UserContext            from "@/app/user/UserContext";
-import {canAccessServerAdmin} from "@/app/user/server-admin-access";
+import {canAccessServerAdmin, canAccessAdminRoute, serverAdminLandingRoute} from "@/app/user/server-admin-access";
 import NavSectionComponent    from "@/components/layout/NavSectionComponent";
 import {ROUTE}                from "@/routes";
 import {EventBus}             from "@/app/event-bus/event-bus";
@@ -283,6 +283,17 @@ import semver                 from "semver";
 
 export default {
   computed: {
+    permittedAdminNavs() {
+      return this.adminNavs.map(nav => {
+        if (nav.to === ROUTE.ADMIN_ROOT) {
+          const to = serverAdminLandingRoute()
+          return to ? { ...nav, to } : null
+        }
+        if (nav.to) return canAccessAdminRoute(nav.to) ? nav : null
+        const navs = nav.navs.filter(child => canAccessAdminRoute(child.to))
+        return navs.length ? { ...nav, navs } : null
+      }).filter(Boolean)
+    },
     ROUTE() {
       return ROUTE
     },
@@ -795,7 +806,7 @@ export default {
         if (n.label && n.to) {
           let adminPanelRouteEnabled = false
           if (n.to.includes(ROUTE.ADMIN_ROOT)) {
-            if (!this.canAccessServerAdmin()) {
+            if (!canAccessAdminRoute(n.to)) {
               continue;
             }
             adminPanelRouteEnabled = true
@@ -816,7 +827,7 @@ export default {
           for (let c of n.navs) {
             let adminPanelRouteEnabled = false
             if (c.to.includes(ROUTE.ADMIN_ROOT)) {
-              if (!this.canAccessServerAdmin()) {
+              if (!canAccessAdminRoute(c.to)) {
                 continue;
               }
               adminPanelRouteEnabled = true
@@ -841,7 +852,7 @@ export default {
       let keys = []
 
       let navs = [
-        this.adminNavs,
+        this.permittedAdminNavs,
         [this.botNav],
         [this.itemNav],
         [this.npcNav],
@@ -880,7 +891,7 @@ export default {
 
 
       const ninja = document.querySelector('ninja-keys')
-      ninja.data  = keys
+      if (ninja) ninja.data = keys
     },
 
     isInAdmin() {
@@ -904,7 +915,7 @@ export default {
     },
 
     canAccessServerAdmin() {
-      return canAccessServerAdmin(this.user)
+      return canAccessServerAdmin()
     },
 
     isLocalHost() {
@@ -1008,6 +1019,9 @@ export default {
     }
   },
   watch: {
+    permittedAdminNavs() {
+      this.parseNinjaKeys()
+    },
     $route(to, from) {
       this.hideNavbarAfterClick()
     }

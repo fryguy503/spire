@@ -6,8 +6,7 @@ import {AppEnv} from "@/app/env/app-env";
 import {EventBus} from "@/app/event-bus/event-bus";
 import qs from "qs";
 import {scrollToHash} from "@/app/utility/scrollToTarget";
-import UserContext from "@/app/user/UserContext";
-import {canAccessServerAdmin} from "@/app/user/server-admin-access";
+import {canAccessAdminRoute, refreshServerAdminAccess, serverAdminLandingRoute} from "@/app/user/server-admin-access";
 
 Vue.use(Router)
 
@@ -546,23 +545,10 @@ router.beforeEach(async (to, from, next) => {
     AppEnv.routeCheckSpireInitialized(to, router)
   }
 
-  // Load auth settings before checking direct entries to an admin route.
-  if (to.path.startsWith('/admin')) {
-    if (typeof AppEnv.getEnv() === 'undefined') {
-      try {
-        await AppEnv.init();
-      } catch {
-        next({ path: '/', replace: true });
-        return;
-      }
-    }
-
-    const authEnabled = AppEnv.isLocalAuthEnabled() || AppEnv.isGithubAuthEnabled();
-    const user = authEnabled ? await UserContext.getUser() : null;
-    if (!canAccessServerAdmin(user)) {
-      next({ path: '/', replace: true });
-      return;
-    }
+  await refreshServerAdminAccess();
+  if ((to.path === '/admin' || to.path.startsWith('/admin/')) && !canAccessAdminRoute(to.path)) {
+    next({ path: serverAdminLandingRoute() || '/', replace: true });
+    return;
   }
 
   EventBus.$emit('ROUTE_CHANGE', to);

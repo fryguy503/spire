@@ -141,6 +141,7 @@
           >
             <td style="text-align: center">
               <router-link
+                v-if="canRead('eqemuserver/get-websocket-auth')"
                 style="font-size:12px; color: white"
                 class="btn btn-sm btn-primary mr-1"
                 :to="'zoneservers/' +zone.client_port + '/logs'"
@@ -150,6 +151,7 @@
               </router-link>
 
               <button
+                v-if="canWrite('eqemuserver/server/process-kill')"
                 class="btn btn-sm btn-danger"
                 @click="killZone(zone)"
                 style="font-size:12px"
@@ -248,6 +250,7 @@
 </template>
 
 <script>
+import {canReadAdminApi, canWriteAdminApi} from "@/app/user/server-admin-access";
 import {ROUTE}                     from "@/routes";
 import {SpireApi}                  from "@/app/api/spire-api";
 import InfoErrorBanner             from "@/components/InfoErrorBanner.vue";
@@ -367,6 +370,8 @@ export default {
     // Navbar.collapse();
   },
   methods: {
+    canRead: canReadAdminApi,
+    canWrite: canWriteAdminApi,
 
     getZoneCounts() {
       return this.zoneList.reduce((acc, zone) => {
@@ -415,6 +420,7 @@ export default {
     },
 
     loadGuilds() {
+      if (!this.canRead('guilds')) return
       SpireApi.v1().get("guilds?limit=1000000").then((r) => {
         if (r.status === 200) {
           this.guilds = r.data

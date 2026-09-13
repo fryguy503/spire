@@ -4,12 +4,14 @@ type Session = {
   env?: 'desktop' | 'production';
   authEnabled?: boolean;
   user?: { id: number; is_admin: boolean } | null;
+  permissions?: { connection_id: number; read_all: boolean; write_all: boolean; read: string[]; write: string[] };
 };
 
 async function mockServer(page: Page, {
   env = 'desktop',
   authEnabled = true,
   user = { id: 2, is_admin: false },
+  permissions = { connection_id: 1, read_all: true, write_all: true, read: [], write: [] },
 }: Session = {}) {
   if (user) {
     await page.addInitScript(() => {
@@ -33,6 +35,7 @@ async function mockServer(page: Page, {
     json: user ? { ...user, user_name: 'Developer', provider: 'local' } : { error: 'User context not found' },
   }));
   await page.route('**/api/v1/connections', route => route.fulfill({ json: { data: [] } }));
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ json: permissions }));
   await page.route('**/api/v1/app/changelog', route => route.fulfill({ json: { data: '' } }));
   await page.route('**/api/v1/eqemuserver/server-stats', route => route.fulfill({ json: {
     server_name: '', zone_count: 0, players_online: 0, uptime: '', main_process_stats: [],
@@ -123,4 +126,168 @@ test('local installations with authentication disabled retain access', async ({ 
   await mockServer(page, { authEnabled: false, user: null });
   await page.goto('/admin/configuration/motd');
   await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+});
+
+const scopedPermissions = (read: string[] = [], write: string[] = []) => ({
+  connection_id: 1, read_all: false, write_all: false, read, write,
+});
+
+for (const [name, permissions] of [
+  ['no grants', scopedPermissions()],
+  ['content-only grants', scopedPermissions(['items'], ['items'])],
+  ['write-only grants', scopedPermissions([], ['variables'])],
+] as const) {
+  test(`${name} hide Server Admin in navigation and search and deny direct entry`, async ({ page }) => {
+    await mockServer(page, { permissions });
+    const requests: string[] = [];
+    page.on('request', request => {
+      if (/\/api\/v1\/(admin\/|eqemuserver\/|variables)/.test(request.url())) requests.push(request.url());
+    });
+    await page.goto('/admin/configuration/motd');
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: 'Version (desktop) 5.6.1' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+    await expect.poll(() => page.locator('ninja-keys').evaluate((element: any) =>
+      element.data.filter((entry: any) => entry.title.startsWith('[Admin]')).length
+    )).toBe(0);
+    expect(requests).toEqual([]);
+  });
+}
+
+test('MOTD-only access shows only MOTD, hides empty groups, and skips unrelated header requests', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['variable', 'variables']) });
+  const adminRequests: string[] = [];
+  page.on('request', request => {
+    if (/\/api\/v1\/(admin\/|eqemuserver\/)/.test(request.url())) adminRequests.push(request.url());
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Server Admin', exact: false }).click();
+  await expect(page).toHaveURL(/\/admin\/configuration\/motd$/);
+  await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  const sidebar = page.locator('#sidebar');
+  await expect(sidebar.getByText('Configuration', { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('link', { name: /MOTD$/ })).toBeVisible();
+  for (const label of ['Players Online', 'Player Operations', 'Database', 'Logs', 'Zone Servers', 'Server Update', 'Server Config']) {
+    await expect(sidebar.getByText(label, { exact: true })).toHaveCount(0);
+  }
+  const adminLinks = await sidebar.locator('a[href^="/admin"]').evaluateAll(links => links.map(link => link.getAttribute('href')));
+  expect(adminLinks.length).toBeGreaterThan(0);
+  expect(adminLinks.every(href => href === '/admin/configuration/motd')).toBe(true);
+  await expect(page.locator('.admin-header-window')).toHaveCount(0);
+  const search = await page.locator('ninja-keys').evaluate((element: any) =>
+    element.data.filter((entry: any) => entry.title.startsWith('[Admin]')).map((entry: any) => entry.title)
+  );
+  expect(search.sort()).toEqual(['[Admin] Server Admin', '[Admin] [Configuration] MOTD']);
+  expect(adminRequests).toEqual([]);
+});
+
+test('a forbidden nested route redirects to the first permitted tool before fetching its data', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['variables']) });
+  let forbiddenRequests = 0;
+  page.on('request', request => {
+    if (request.url().includes('/admin/serverconfig')) forbiddenRequests++;
+  });
+  await page.goto('/admin/configuration/server?s=Database');
+  await expect(page).toHaveURL(/\/admin\/configuration\/motd$/);
+  await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  expect(forbiddenRequests).toBe(0);
+});
+
+test('process-stats-only access renders that widget without unrelated monitoring or process controls', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['eqemuserver/server-stats']) });
+  const requests: string[] = [];
+  page.on('request', request => {
+    if (/\/api\/v1\/(admin\/|eqemuserver\/)/.test(request.url())) requests.push(new URL(request.url()).pathname);
+  });
+  await page.goto('/admin');
+  await expect(page.getByText('Server Processes', { exact: true })).toBeVisible();
+  await expect(page.locator('.admin-header-window')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Start Server|Restart|Stop Server/ })).toHaveCount(0);
+  await expect(page.locator('[data-testid="admin-host-metrics"]')).toHaveCount(0);
+  expect(requests.length).toBeGreaterThan(0);
+  expect(requests.every(path => path === '/api/v1/eqemuserver/server-stats')).toBe(true);
+});
+
+test('read-only ALL grants hide command-only tools and server mutation controls', async ({ page }) => {
+  await mockServer(page, { permissions: { ...scopedPermissions(), read_all: true } });
+  await page.goto('/admin');
+  await expect(page.getByText('Server Processes', { exact: true })).toBeVisible();
+  const adminSearch = await page.locator('ninja-keys').evaluate((element: any) =>
+    element.data.filter((entry: any) => entry.title.startsWith('[Admin]')).map((entry: any) => entry.title)
+  );
+  expect(adminSearch).toContain('[Admin] [Configuration] MOTD');
+  expect(adminSearch).not.toContain('[Admin] [Database] Database Backups');
+  expect(adminSearch).not.toContain('[Admin] Reloading (Global)');
+  await expect(page.locator('.admin-header-window a').filter({ hasText: 'Unlocked' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Start Server|Restart|Stop Server/ })).toHaveCount(0);
+});
+
+test('instance-admin status alone does not grant access to connection tools', async ({ page }) => {
+  await mockServer(page, { user: { id: 1, is_admin: true }, permissions: scopedPermissions() });
+  await page.goto('/admin');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+});
+
+test('permission lookup failures fail closed', async ({ page }) => {
+  await mockServer(page);
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ status: 503, json: { error: 'Unavailable' } }));
+  await page.goto('/admin');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+});
+
+test('malformed permission responses fail closed', async ({ page }) => {
+  await mockServer(page);
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ json: { read_all: 'false', read: '*' } }));
+  await page.goto('/admin');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+});
+
+for (const tool of [
+  { path: '/admin/log-settings', resource: 'logsys_categories', title: 'Log Settings' },
+  { path: '/admin/player-event-logs/settings', resource: 'player_event_log_settings', title: 'Log Settings' },
+  { path: '/admin/player-event-logs/explorer', resource: 'player_event_logs', title: 'Player Event Log Explorer' },
+  { path: '/admin/zones', resource: 'eqemuserver/zoneserver-list', title: 'Zone Servers' },
+]) {
+  test(`${tool.resource} access does not expose optional tools or fetch their data`, async ({ page }) => {
+    await mockServer(page, { permissions: scopedPermissions([tool.resource]) });
+    if (tool.path === '/admin/zones') {
+      await page.route('**/api/v1/eqemuserver/zoneserver-list', route => route.fulfill({ json: [{
+        id: 1, zone_id: 1, zone_name: 'qeynos', number_players: 0, clients: [],
+        zone_os_pid: 1234, zone_server_address: '127.0.0.1', client_port: 7000, cpu: 0,
+      }] }));
+    }
+    const forbidden: string[] = [];
+    page.on('request', request => {
+      if (/\/api\/v1\/(discord_webhooks|guilds|eqemuserver\/player-event-logs\/etl-settings)/.test(request.url())) {
+        forbidden.push(request.url());
+      }
+    });
+    await page.goto(tool.path);
+    await expect(page).toHaveURL(new RegExp(`${tool.path}$`));
+    await expect(page.locator('.main-content').getByText(tool.title, { exact: true }).first()).toBeVisible();
+    await expect(page.locator('.main-content').getByRole('link', { name: /Discord Webhook/ })).toHaveCount(0);
+    if (tool.path === '/admin/zones') {
+      await expect(page.getByTitle('Logs', { exact: true })).toHaveCount(0);
+      await expect(page.getByTitle('Kill Zone', { exact: true })).toHaveCount(0);
+    }
+    expect(forbidden).toEqual([]);
+  });
+}
+
+test('navigation refreshes permissions after grants change on the active connection', async ({ page }) => {
+  await mockServer(page);
+  let permissions = scopedPermissions(['variables']);
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ json: permissions }));
+  await page.goto('/admin');
+  await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  permissions = scopedPermissions(['items']);
+  await page.getByRole('link', { name: 'Editing Tools Home', exact: false }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+  await expect.poll(() => page.locator('ninja-keys').evaluate((element: any) =>
+    element.data.filter((entry: any) => entry.title.startsWith('[Admin]')).length
+  )).toBe(0);
 });

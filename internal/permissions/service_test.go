@@ -39,6 +39,7 @@ func TestConnectionPermissionsWithoutInstanceAdmin(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cache := gocache.New(gocache.NoExpiration, 0)
 			// Seed the same permission cache used after resolving a connection.
+			tc.permissions.connectionID = 1
 			cache.Set("user-permissions-2", tc.permissions, gocache.NoExpiration)
 			service := &Service{cache: cache}
 			e := echo.New()
@@ -62,6 +63,36 @@ func TestIsWriteRequestIncludesDelete(t *testing.T) {
 		if !service.IsWriteRequest(context) {
 			t.Errorf("IsWriteRequest(%s) = false, want true", method)
 		}
+	}
+}
+
+func TestServerUtilityPermissions(t *testing.T) {
+	for _, tc := range []struct {
+		resource string
+		path     string
+		method   string
+	}{
+		{"Server Database Backup", "/api/v1/backup/mysql", http.MethodPost},
+		{"Server Database Backup", "/api/v1/backup/mysql-dump-download/test.sql", http.MethodGet},
+		{"Server Process Management", "/api/v1/admin/launcherconfig", http.MethodGet},
+		{"Server Process Management", "/api/v1/admin/launcherconfig", http.MethodPost},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			cache := gocache.New(gocache.NoExpiration, 0)
+			service := &Service{cache: cache}
+			cache.Set("user-permissions-2", userPermissions{
+				connectionID: 1,
+				permissions: []Resource{{
+					RouteMatchPrefixes: service.RegisterManualResources()[tc.resource],
+					CanRead:            true, CanWrite: tc.method == http.MethodPost,
+				}},
+			}, gocache.NoExpiration)
+			e := echo.New()
+			context := e.NewContext(httptest.NewRequest(tc.method, tc.path, nil), httptest.NewRecorder())
+			if !service.CanAccessResource(context, models.User{ID: 2}, 1) {
+				t.Fatal("the tool's named permission must authorize its endpoint")
+			}
+		})
 	}
 }
 

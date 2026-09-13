@@ -52,7 +52,7 @@
             <th style="width: 230px">File Log Level</th>
             <th style="width: 230px">GM (In-Game) Log Level</th>
             <th style="width: 230px">Discord Log Level</th>
-            <th>
+            <th v-if="canRead('discord_webhooks')">
               <router-link
                 style="color: #8aa3ff"
                 :to="ROUTE.ADMIN_DISCORD_WEBHOOK_SETTINGS"
@@ -221,6 +221,7 @@
               </div>
             </td>
             <td
+              v-if="canRead('discord_webhooks')"
               :style="(s.log_to_discord > 0 && s.discord_webhook_id === 0 ? 'color: red' : '')"
               :title="(s.log_to_discord > 0 && s.discord_webhook_id === 0 ? 'Webhook needs to be assigned' : '')"
             >
@@ -252,6 +253,7 @@
 </template>
 
 <script>
+import {canReadAdminApi} from "@/app/user/server-admin-access";
 import EqWindow            from "@/components/eq-ui/EQWindow.vue";
 import {SpireApi}          from "@/app/api/spire-api";
 import {LogsysCategoryApi} from "@/app/api/api/logsys-category-api";
@@ -288,9 +290,9 @@ export default {
         this.settings = r.data
       }
 
-      r = await (new DiscordWebhookApi(...SpireApi.cfg())).listDiscordWebhooks()
-      if (r.status === 200) {
-        this.discordWebhooks = r.data
+      if (this.canRead('discord_webhooks')) {
+        r = await (new DiscordWebhookApi(...SpireApi.cfg())).listDiscordWebhooks()
+        if (r.status === 200) this.discordWebhooks = r.data
       }
     } catch (e) {
       // error notify
@@ -300,6 +302,7 @@ export default {
     }
   },
   methods: {
+    canRead: canReadAdminApi,
     filteredSettings(s) {
       return s.filter((e) => {
         if (this.search && this.search.length > 0) {
