@@ -1,4 +1,4 @@
-## [Unreleased] 9/13/2026
+## [5.6.2] 9/13/2026
 
 * Fixed Server Admin incorrectly redirecting authorized users back to Home.
 * Server Admin now shows only tools permitted by the active connection. The section is hidden entirely when no tools are accessible.
