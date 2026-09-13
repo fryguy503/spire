@@ -4,9 +4,9 @@
 
     <div class="main-content">
       <content-area :key="permissionKey">
-        <admin-header v-if="isLocal"/>
+        <admin-header v-if="isLocal && canAccessServerAdmin()"/>
 
-        <router-view></router-view>
+        <router-view v-if="canAccessAdminRoute($route.path)"></router-view>
       </content-area>
     </div>
 
@@ -26,9 +26,10 @@ import ContentArea from "@/components/layout/ContentArea.vue";
 import Navbar from "@/components/layout/Navbar.vue";
 import AdminHeader from "@/views/admin/layout/AdminHeader.vue";
 import {AppEnv} from "@/app/env/app-env";
-import {serverAdminAccess} from "@/app/user/server-admin-access";
+import {canAccessAdminRoute, canAccessServerAdmin, serverAdminAccess} from "@/app/user/server-admin-access";
 
 export default {
+  methods: { canAccessAdminRoute, canAccessServerAdmin },
   computed: {
     permissionKey() {
       return JSON.stringify(serverAdminAccess.grants)

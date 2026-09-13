@@ -153,7 +153,7 @@
 </template>
 
 <script>
-import {canReadAdminApi} from "@/app/user/server-admin-access";
+import {canReadAdminApi, canWriteAdminApi} from "@/app/user/server-admin-access";
 import EqWindow                   from "@/components/eq-ui/EQWindow.vue";
 import {SpireApi}                 from "@/app/api/spire-api";
 import {LogsysCategoryApi}        from "@/app/api/api/logsys-category-api";
@@ -253,6 +253,7 @@ export default {
               )
           }, 1)
 
+          if (!canWriteAdminApi('eqemuserver/reload/logs')) return
           const r = await SpireApi.v1().post("eqemuserver/reload/logs")
           if (r.status === 200) {
             setTimeout(() => {

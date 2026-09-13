@@ -5,10 +5,48 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/EQEmuTools/spire/internal/database"
 	"github.com/EQEmuTools/spire/internal/models"
+	"github.com/gertd/go-pluralize"
 	"github.com/labstack/echo/v4"
 	gocache "github.com/patrickmn/go-cache"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
+
+func TestPermissionCacheDoesNotReuseOwnershipForAnotherConnection(t *testing.T) {
+	// Dry-run queries produce no grants for connection 2 without contacting a DB.
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		DSN: "qa@tcp(127.0.0.1:1)/qa", SkipInitializeWithVersion: true,
+	}), &gorm.Config{DryRun: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pool.Close() })
+	cache := gocache.New(gocache.NoExpiration, 0)
+	cache.Set("user-permissions-2", userPermissions{
+		connectionID: 1, isConnectionOwner: true,
+	}, gocache.NoExpiration)
+	resolver := database.NewResolver(database.NewConnections(db, nil, nil), nil, nil, cache)
+	service := NewService(resolver, cache, nil, pluralize.NewClient())
+	e := echo.New()
+	context := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/admin/serverconfig", nil), httptest.NewRecorder())
+	user := models.User{ID: 2}
+	if !service.CanAccessResource(context, user, 1) {
+		t.Fatal("the owned connection should be accessible")
+	}
+	if service.CanAccessResource(context, user, 2) {
+		t.Fatal("ownership of connection 1 must not grant access to connection 2")
+	}
+	cached, _ := cache.Get("user-permissions-2")
+	if cached.(userPermissions).connectionID != 2 {
+		t.Fatal("the cache should now describe the newly selected connection")
+	}
+}
 
 func TestConnectionPermissionsWithoutInstanceAdmin(t *testing.T) {
 	for _, tc := range []struct {

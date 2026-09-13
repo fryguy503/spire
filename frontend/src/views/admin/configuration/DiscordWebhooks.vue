@@ -105,6 +105,7 @@
 </template>
 
 <script>
+import {canWriteAdminApi} from "@/app/user/server-admin-access";
 import EqWindow            from "@/components/eq-ui/EQWindow.vue";
 import {DiscordWebhookApi} from "@/app/api/api/discord-webhook-api";
 import {SpireApi}          from "@/app/api/spire-api";
@@ -141,6 +142,7 @@ export default {
             this.notification = `Deleted Discord Webhook [${e.webhook_name}] (${e.id})!`
             this.loadWebhooks()
 
+            if (!canWriteAdminApi('eqemuserver/reload/logs')) return
             const r = await SpireApi.v1().post("eqemuserver/reload/logs")
             if (r.status === 200) {
               setTimeout(() => {
@@ -169,6 +171,7 @@ export default {
           this.notification = `Updated Discord Webhook [${e.webhook_name}] (${e.id})!`
           this.loadWebhooks()
 
+          if (!canWriteAdminApi('eqemuserver/reload/logs')) return
           const r = await SpireApi.v1().post("eqemuserver/reload/logs")
           if (r.status === 200) {
             setTimeout(() => {

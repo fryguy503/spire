@@ -270,7 +270,7 @@ import {App}                  from "@/constants/app";
 import NavbarDropdownMenu     from "@/components/layout/NavbarDropdownMenu";
 import NavbarUserSettingsCog  from "@/components/layout/NavbarUserSettingsCog";
 import UserContext            from "@/app/user/UserContext";
-import {canAccessServerAdmin, canAccessAdminRoute, serverAdminLandingRoute} from "@/app/user/server-admin-access";
+import {canAccessServerAdmin, canAccessAdminRoute, refreshServerAdminAccess, serverAdminAccess, serverAdminLandingRoute} from "@/app/user/server-admin-access";
 import NavSectionComponent    from "@/components/layout/NavSectionComponent";
 import {ROUTE}                from "@/routes";
 import {EventBus}             from "@/app/event-bus/event-bus";
@@ -762,6 +762,7 @@ export default {
     EventBus.$on("APP_BETA_RELEASE_PREVIEW_CHANGED", this.handleBetaReleasePreviewChanged);
     EventBus.$on("APP_UPDATE_CHANNEL_CHANGED", this.handleUpdateChannelChanged);
     EventBus.$on("ROUTE_CHANGE", this.handleRouteChange);
+    EventBus.$on("DB_CONNECTION_CHANGE", this.handleConnectionChange);
   },
   destroyed() {
     EventBus.$off("HIDE_NAVBAR", this.toggleNavbarCollapse);
@@ -770,6 +771,7 @@ export default {
     EventBus.$off("APP_BETA_RELEASE_PREVIEW_CHANGED", this.handleBetaReleasePreviewChanged);
     EventBus.$off("APP_UPDATE_CHANNEL_CHANGED", this.handleUpdateChannelChanged);
     EventBus.$off("ROUTE_CHANGE", this.handleRouteChange);
+    EventBus.$off("DB_CONNECTION_CHANGE", this.handleConnectionChange);
   },
 
   async mounted() {
@@ -895,7 +897,7 @@ export default {
     },
 
     isInAdmin() {
-      return this.$route.path.includes("/admin")
+      return this.$route.matched.some(route => route.path === ROUTE.ADMIN_ROOT)
     },
 
     getPartitionName() {
@@ -972,6 +974,14 @@ export default {
 
     handleRouteChange() {
       this.setSidebarStyle()
+    },
+    async handleConnectionChange() {
+      // Stop displaying the previous connection's tools while the new ACL loads.
+      serverAdminAccess.grants = null
+      await refreshServerAdminAccess()
+      if (this.isInAdmin() && !canAccessAdminRoute(this.$route.path)) {
+        this.$router.replace(serverAdminLandingRoute() || '/').catch(() => {})
+      }
     },
     handleAppEnvLoaded() {
       this.appEnv      = AppEnv.getEnv();

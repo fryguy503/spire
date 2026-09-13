@@ -124,13 +124,72 @@ test('instance administrators retain access', async ({ page }) => {
 
 test('local installations with authentication disabled retain access', async ({ page }) => {
   await mockServer(page, { authEnabled: false, user: null });
+  let permissionRequests = 0;
+  page.on('request', request => {
+    if (request.url().endsWith('/permissions/me')) permissionRequests++;
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Server Admin', exact: false }).click();
+  await expect(page.getByText('Server Processes', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Reloading \(Global\)/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Server Update$/ })).toBeVisible();
   await page.goto('/admin/configuration/motd');
   await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  expect(permissionRequests).toBe(0);
 });
 
 const scopedPermissions = (read: string[] = [], write: string[] = []) => ({
   connection_id: 1, read_all: false, write_all: false, read, write,
 });
+
+test('mixed-case admin URLs cannot bypass the permission guard', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions() });
+  let variableRequests = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/v1/variables')) variableRequests++;
+  });
+  await page.goto('/ADMIN/configuration/motd');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('textbox')).toHaveCount(0);
+  expect(variableRequests).toBe(0);
+});
+
+test('permitted mixed-case admin URLs retain the admin menu', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['variables']) });
+  await page.goto('/ADMIN/CONFIGURATION/MOTD');
+  await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  await expect(page.getByRole('link', { name: /Editing Tools Home$/ })).toBeVisible();
+  await expect(page.locator('#sidebar').getByText('Configuration', { exact: true })).toBeVisible();
+});
+
+for (const canReload of [false, true]) {
+  test(`a rule save ${canReload ? 'with' : 'without'} reload permission respects the reload grant`, async ({ page }) => {
+    await mockServer(page, { permissions: scopedPermissions(['rule_values'], ['rule_value', ...(canReload ? ['eqemuserver/reload'] : [])]) });
+    const rule = { ruleset_id: 1, rule_name: 'Character:MaxLevel', rule_value: '65', notes: 'Maximum level' };
+    await page.route('**/api/v1/rule_values*', route => route.fulfill({ json: [rule] }));
+    await page.route('**/api/v1/rule_value/1*', async route => {
+      rule.rule_value = '70';
+      await route.fulfill({ json: rule });
+    });
+    let reloadRequests = 0;
+    await page.route('**/api/v1/eqemuserver/reload/rules', route => {
+      reloadRequests++;
+      if (canReload) return route.fulfill({ json: { message: 'Reloaded' } });
+      return route.fulfill({ status: 403, json: { error: 'Reload denied' } });
+    });
+    await page.goto('/admin/configuration/server-rules');
+    const value = page.locator('tbody tr').filter({ hasText: 'Character:MaxLevel' }).getByRole('textbox');
+    await value.fill('70');
+    await value.press('Tab');
+    if (canReload) {
+      await expect(page.getByText('Server rules reloaded in-game!', { exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByText('Updated rule (1) [Character:MaxLevel] to value (70)!', { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText('Reload denied', { exact: true })).toHaveCount(0);
+    expect(reloadRequests).toBe(canReload ? 1 : 0);
+  });
+}
 
 for (const [name, permissions] of [
   ['no grants', scopedPermissions()],
@@ -290,4 +349,50 @@ test('navigation refreshes permissions after grants change on the active connect
   await expect.poll(() => page.locator('ninja-keys').evaluate((element: any) =>
     element.data.filter((entry: any) => entry.title.startsWith('[Admin]')).length
   )).toBe(0);
+});
+
+test('revoking the current tool does not remount it during navigation', async ({ page }) => {
+  await mockServer(page);
+  let permissions = scopedPermissions(['variables']);
+  let variableRequests = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/v1/variables')) variableRequests++;
+  });
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ json: permissions }));
+  await page.goto('/admin/configuration/motd');
+  await expect(page.getByRole('textbox')).toHaveValue('Welcome to the test server');
+  const before = variableRequests;
+  permissions = scopedPermissions();
+  await page.getByRole('link', { name: /Editing Tools Home$/ }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: /Server Admin$/ })).toHaveCount(0);
+  expect(variableRequests).toBe(before);
+});
+
+test('switching connections refreshes the menu without navigating away', async ({ page }) => {
+  await mockServer(page);
+  let active = 1;
+  const connection = (id: number) => ({
+    id, active: active === id ? 1 : 0, server_database_connection_id: id,
+    database_connection: {
+      id, name: `QA connection ${id}`, created_by: 1, db_host: 'localhost', db_port: 3306,
+      db_name: 'qa', db_username: 'qa', content_db_username: '', user_server_database_connections: [],
+    },
+  });
+  await page.route('**/api/v1/connections', route => route.fulfill({ json: { data: [connection(1), connection(2)] } }));
+  await page.route('**/api/v1/connection-check/*', route => route.fulfill({ json: { data: { message: 'Online' } } }));
+  await page.route('**/api/v1/permissions/me', route => route.fulfill({ json: {
+    ...scopedPermissions(active === 1 ? ['variables'] : ['items']), connection_id: active,
+  } }));
+  await page.route('**/api/v1/connection/*/set-active', route => {
+    active = Number(new URL(route.request().url()).pathname.split('/')[4]);
+    return route.fulfill({ json: { data: true } });
+  });
+  await page.goto('/connections');
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toBeVisible();
+  await page.getByText('Set Active', { exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/connections$/);
+  await page.getByText('Set Active', { exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Server Admin', exact: false })).toBeVisible();
 });

@@ -546,7 +546,9 @@ router.beforeEach(async (to, from, next) => {
   }
 
   await refreshServerAdminAccess();
-  if ((to.path === '/admin' || to.path.startsWith('/admin/')) && !canAccessAdminRoute(to.path)) {
+  // Vue Router matches paths case-insensitively; use the matched route record
+  // so differently cased URLs cannot bypass the admin boundary.
+  if (to.matched.some(route => route.path === ROUTE.ADMIN_ROOT) && !canAccessAdminRoute(to.path)) {
     next({ path: serverAdminLandingRoute() || '/', replace: true });
     return;
   }
