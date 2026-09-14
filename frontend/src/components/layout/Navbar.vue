@@ -218,6 +218,19 @@
         <!-- Push content down -->
         <div class="mt-auto"></div>
 
+        <a
+          class="sidebar-feedback"
+          href="https://github.com/Valorith/spire/issues/new"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Share feedback on GitHub (opens in a new tab)"
+        >
+          <i class="fe fe-message-square" aria-hidden="true"></i>
+          <span>Feedback</span>
+          <i class="fe fe-external-link sidebar-feedback-external" aria-hidden="true"></i>
+          <span class="sr-only">on GitHub (opens in a new tab)</span>
+        </a>
+
         <!-- User (md) -->
         <div class="navbar-user d-none d-md-flex" id="sidebarUser">
           <navbar-user-settings-cog/>
@@ -1040,6 +1053,45 @@ export default {
 </script>
 
 <style scoped>
+.sidebar-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 44px;
+  margin: 12px 0 18px;
+  padding: 10px 14px;
+  border: 1px solid #9b7b3e;
+  border-radius: 5px;
+  background: rgba(20, 17, 12, .86);
+  color: #e8c56d;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(232, 197, 109, .12);
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.sidebar-feedback:hover,
+.sidebar-feedback:focus-visible {
+  background: #322818;
+  border-color: #e8c56d;
+  color: #ffe5a3;
+  text-decoration: none;
+}
+
+.sidebar-feedback:focus-visible {
+  box-shadow: 0 0 0 2px #14110c, 0 0 0 4px #e8c56d;
+}
+
+.sidebar-feedback-external {
+  font-size: 11px;
+  opacity: .75;
+}
+
 .spire-brand-link {
   display: inline-block;
 }
@@ -1074,6 +1126,7 @@ export default {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sidebar-feedback,
   .spire-beta-stamp {
     transition: none;
   }
