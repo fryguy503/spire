@@ -1,4 +1,4 @@
-## [Unreleased] 9/14/2026
+## [5.7.0] 9/14/2026
 
 * Spire now restarts automatically after updates on Windows and Linux. The built-in launcher updates with Spire.
 * Update restarts preserve launch settings and the desktop port without opening another browser tab.
