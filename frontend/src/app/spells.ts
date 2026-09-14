@@ -864,6 +864,10 @@ export class Spells {
           }
           break;
 
+        case 155:
+          printBuffer += this.getFormatStandard("Critical Nuke Damage", "%", value_min, value_max, minlvl, maxlvl) + " of Base Damage"
+          break;
+
         case 156:
           printBuffer += "Illusion: Target"
           break;
@@ -933,7 +937,7 @@ export class Spells {
           break;
 
         case 170:
-          printBuffer += this.getFormatStandard("Critical Nuke Damage", "%", value_min, value_max, minlvl, maxlvl) + " of Base Damage"
+          printBuffer += this.getFormatStandard("Chance to Critical Nuke", "%", value_min, value_max, minlvl, maxlvl)
           break;
 
         case 171:
@@ -2356,8 +2360,8 @@ export class Spells {
           printBuffer += this.getFormatStandard((limit === 0 ? "Rear" : "Frontal") + " Arc Melee Damage", "%", value_min / 10, value_max / 10, minlvl, maxlvl)
           break;
 
-        case 503:
-          printBuffer += this.getFormatStandard((limit === 0 ? "Rear" : "Frontal") + " Arc Melee Damage Amount", "", value_min / 10, value_max / 10, minlvl, maxlvl)
+        case 504:
+          printBuffer += this.getFormatStandard((limit === 0 ? "Rear" : "Frontal") + " Arc Melee Damage Amount", "", value_min, value_max, minlvl, maxlvl)
           break;
 
         case 505:
@@ -2370,6 +2374,10 @@ export class Spells {
 
         case 507:
           printBuffer += this.getFocusPercentRange("Spell Power", base, limit, false) + " (Focus Spell DOT, DD and Healing)"
+          break;
+
+        case 508:
+          printBuffer += this.getFormatStandard("Spell Power", "", value_min, value_max, minlvl, maxlvl) + " (Focus Spell DOT, DD and Healing)"
           break;
 
         case 509:
