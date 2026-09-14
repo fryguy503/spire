@@ -122,6 +122,52 @@ Spire on your development server instantly.
 
 ### Updating a local Spire install
 
+Save your edits, open **Spire Update Check**, and install the offered update.
+Spire restarts automatically on Windows and Linux, including its built-in
+launcher. The browser reloads when the updated executable is serving requests.
+Direct desktop launches keep the same port and do not open another browser tab.
+
+The default `SPIRE_RESTART_MODE=self` works for direct launches on both systems.
+On Linux it also preserves the launcher PID tracked by systemd, Docker, and
+AkkStack. On Windows, the replacement launcher waits for the previous launcher
+to exit before starting the updated server.
+
+For a **Windows service wrapper**, set `SPIRE_RESTART_MODE=managed` in the
+service's environment and configure the wrapper to restart Spire on exit code
+`75`. In this mode Spire exits after installing an update and lets the wrapper
+start the updated executable and launcher. Use `http:serve --port <port>` for a
+fixed service address. Managed mode is also available on Linux when the service
+manager must own the restart. Do not select managed mode for an unsupervised
+process.
+
+This behavior starts after you install and launch a release containing the new
+launcher. Older releases still use their existing restart behavior for that
+first update. Download or installation failures leave the running Spire process
+available and display an error. If reconnecting takes more than two minutes,
+the update dialog offers **Try connecting again** without reinstalling.
+
+The launcher blocks while its worker runs; it does not poll for process health.
+If a worker ignores a stop request, the launcher terminates it after 10 seconds.
+A worker also exits if its launcher is forcibly terminated. Windows launcher
+handoffs time out after 30 seconds. Desktop readiness checks stop on success,
+reject server errors, and cancel outstanding requests when their timeout expires.
+
+To verify the launcher on Windows or Linux, run:
+
+```text
+go test ./internal/selfrestart ./internal/desktop
+go test -tags=integration ./internal/updater -run "TestLauncherReliability|TestUpdateAndRestart" -v
+```
+
+The integration tests exercise real processes, consecutive binary updates,
+forced parent termination, stalled log pipes, and 50 launcher handoffs. They report idle CPU time,
+resident memory, startup overhead, and handoff latency using a local HTTP fixture
+that does not initialize a database. Set `SPIRE_LAUNCHER_QA_REPORT` to a writable
+JSON file path to save those measurements. The **Launcher reliability** GitHub
+Actions workflow runs these checks on Windows and Linux and saves the reports.
+
+#### Updating from a terminal
+
 Spire release binaries are available for Windows and Linux. To update an existing
 local install to the highest published version, including beta releases, stop
 Spire, open a terminal in the directory containing the Spire executable, and run

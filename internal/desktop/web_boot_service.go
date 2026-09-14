@@ -1,11 +1,13 @@
 package desktop
 
 import (
+	"context"
 	"fmt"
 	"github.com/EQEmuTools/spire/internal/env"
 	"github.com/EQEmuTools/spire/internal/eqemuserverconfig"
 	"github.com/EQEmuTools/spire/internal/http"
 	"github.com/EQEmuTools/spire/internal/logger"
+	"github.com/EQEmuTools/spire/internal/selfrestart"
 	"log"
 	"net"
 	gohttp "net/http"
@@ -57,11 +59,16 @@ func (c *WebBoot) Boot() {
 	if len(os.Getenv("SPIRE_HTTP_PORT")) > 0 {
 		port = env.GetInt("SPIRE_HTTP_PORT", "3000")
 	}
+	if selfrestart.DesktopPort() > 0 {
+		port = selfrestart.DesktopPort()
+	}
 
 	if port == 0 {
 		fmt.Println("Failed to find free port, exiting...")
 		os.Exit(1)
 	}
+
+	selfrestart.SetDesktopPort(port)
 
 	// start web server
 	go func() {
@@ -76,7 +83,9 @@ func (c *WebBoot) Boot() {
 	if err != nil {
 		c.logger.Fatal().Err(err).Msg("Failed to open browser window")
 	}
-	openBrowser(web)
+	if !selfrestart.ResumedDesktop() {
+		openBrowser(web)
+	}
 
 	// wait for signal to kill
 	ch := make(chan os.Signal, 1)
@@ -132,21 +141,28 @@ func openBrowser(url string) {
 }
 
 func waitForSiteToBeAvailable(URL string, timeout time.Duration) error {
-	ch := make(chan bool)
-	go func() {
-		for {
-			_, err := gohttp.Get(URL)
-			if err == nil {
-				ch <- true
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	request, err := gohttp.NewRequestWithContext(ctx, gohttp.MethodGet, URL, nil)
+	if err != nil {
+		return err
+	}
+	client := &gohttp.Client{Timeout: time.Second}
+	defer client.CloseIdleConnections()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		response, err := client.Do(request)
+		if err == nil {
+			_ = response.Body.Close()
+			if response.StatusCode >= 200 && response.StatusCode < 300 {
+				return nil
 			}
-			time.Sleep(10 * time.Millisecond)
 		}
-	}()
-
-	select {
-	case <-ch:
-		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("server did not reply after %v", timeout)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("server was not ready after %v: %w", timeout, ctx.Err())
+		case <-ticker.C:
+		}
 	}
 }

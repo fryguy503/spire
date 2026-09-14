@@ -1,6 +1,7 @@
 <template>
   <EqModal
     title="Spire Updates"
+    :dismissible="!updating && !reloading"
     @close="$emit('close')"
     size="xl"
   >
@@ -99,8 +100,8 @@
           <div class="mt-3">
             <h4>Updating Spire</h4>
             <p class="mb-0">
-              Spire exits after the update. Process managers and akk-stack restart it automatically;
-              otherwise restart Spire manually.
+              Spire will restart automatically after the update on Windows and Linux.
+              Save your edits before installing. This page will reload when the updated version is ready.
             </p>
           </div>
         </div>
@@ -123,8 +124,12 @@
       </div>
 
       <div v-else>
-        Spire has been updated. Waiting for restart to reload the page.<br><br>
-        If Spire is not managed by a process manager or akk-stack, restart it manually.
+        <span v-if="!restartTimedOut" data-testid="spire-restarting">
+          Spire is restarting. This page will reload when the updated version is ready.
+        </span>
+        <span v-else data-testid="spire-restart-timeout">
+          Spire has not come back yet. Check its startup log, then try connecting again.
+        </span>
       </div>
 
       <info-error-banner
@@ -142,7 +147,7 @@
         <button
           @click="$emit('close')"
           class="btn btn-sm mr-3 btn-default"
-          v-if="!reloading"
+          v-if="!reloading && !updating"
           data-testid="close-spire-update"
         >
           <i class="fe fe-x"></i> Close
@@ -151,7 +156,7 @@
         <button
           @click="$emit('ignore')"
           class="btn btn-sm mr-3 btn-default"
-          v-if="!reloading && hasRelease"
+          v-if="!reloading && !updating && hasRelease"
         >
           <i class="fe fe-eye-off"></i> Skip this version
         </button>
@@ -162,6 +167,15 @@
           v-if="!reloading && statusError"
         >
           <i class="fe fe-refresh-cw"></i> Retry
+        </button>
+
+        <button
+          v-if="restartTimedOut"
+          @click="waitForRestart"
+          class="btn btn-sm mr-3 btn-primary"
+          data-testid="retry-spire-restart"
+        >
+          <i class="fe fe-refresh-cw"></i> Try connecting again
         </button>
 
         <button
@@ -230,6 +244,10 @@ export default {
       releaseNotes: "",
       updating: false,
       reloading: false,
+      restartTimedOut: false,
+      restartTimer: null,
+      restartDeadline: 0,
+      expectedVersion: "",
       notification: "",
       error: ""
     };
@@ -265,6 +283,10 @@ export default {
       }
     }
   },
+  beforeDestroy() {
+    clearTimeout(this.restartTimer);
+    this.reloading = false;
+  },
   methods: {
     async updateSpire() {
       this.updating = true;
@@ -276,13 +298,8 @@ export default {
           LocalSettings.clearUpdateVariables();
           this.updating = false;
           this.reloading = true;
-
-          setInterval(async () => {
-            const r = await SpireApi.v1().get("app/env");
-            if (r.status === 200) {
-              location.reload();
-            }
-          }, 1000);
+          this.expectedVersion = (response.data.data.version || this.release.tag_name).replace(/^v/, "");
+          this.waitForRestart();
           return;
         }
 
@@ -295,6 +312,39 @@ export default {
           this.updating = false;
         }
       }
+    },
+    waitForRestart() {
+      clearTimeout(this.restartTimer);
+      this.restartTimedOut = false;
+      this.restartDeadline = Date.now() + 120000;
+      this.restartTimer = setTimeout(this.pollRestart, 1000);
+    },
+    async pollRestart() {
+      if (!this.reloading) {
+        return;
+      }
+      try {
+        const response = await SpireApi.v1().get("app/env", {
+          timeout: 3000,
+          params: {restartCheck: Date.now()}
+        });
+        const version = response.data?.data?.runtime_version || response.data?.data?.version;
+        if (this.reloading && response.status === 200 && typeof version === "string" &&
+          version.replace(/^v/, "") === this.expectedVersion) {
+          location.reload();
+          return;
+        }
+      } catch (e) {
+        // Connection failures are expected while the old process exits.
+      }
+      if (!this.reloading) {
+        return;
+      }
+      if (Date.now() >= this.restartDeadline) {
+        this.restartTimedOut = true;
+        return;
+      }
+      this.restartTimer = setTimeout(this.pollRestart, 1000);
     }
   }
 };
