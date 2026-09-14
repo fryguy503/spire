@@ -1,3 +1,10 @@
+## [Unreleased] 9/14/2026
+
+* Fixed missing Spell Critical Damage descriptions in spell previews, including Deadeye Discipline. Effect 155 now displays correctly.
+* Fixed Spell Critical Chance being incorrectly described as critical damage. Effect 170 now shows the chance modifier.
+* Fixed missing descriptions for rear and frontal melee damage amount bonuses. Effect 504 now displays the correct amount.
+* Added missing descriptions for flat spell damage and healing focus bonuses. Effect 508 now displays its configured amount correctly.
+
 ## [5.7.0] 9/14/2026
 
 * Spire now restarts automatically after updates on Windows and Linux. The built-in launcher updates with Spire.
