@@ -221,3 +221,102 @@ test('rolls the Settings toggle back when the channel cannot be persisted', asyn
   expect(requests.channel()).toBe('beta');
   expect(requests.channelWrites()).toBe(1);
 });
+
+test('waits through the old process and connection failures before reloading the updated runtime', async ({ page }) => {
+  await installUpdateMocks(page);
+  let checks = 0;
+  let navigations = 0;
+  page.on('load', () => { navigations += 1; });
+  await page.route('**/api/v1/app/update', route => route.fulfill({
+    json: { data: { updated: true, version: '5.5.0' } },
+  }));
+  await page.route('**/api/v1/app/env?restartCheck=*', route => {
+    checks += 1;
+    if (checks === 2) return route.abort('connectionrefused');
+    return route.fulfill({ json: { data: {
+      // Disk metadata can show the new version before the process restarts.
+      version: '5.5.0', runtime_version: checks < 4 ? '5.4.1' : '5.5.0',
+    } } });
+  });
+  await page.goto('/');
+  await page.getByTestId('install-spire-update').click();
+  await expect(page.getByTestId('spire-restarting')).toBeVisible();
+  await expect.poll(() => checks).toBeGreaterThanOrEqual(2);
+  expect(navigations).toBe(1);
+  await expect(page.getByTestId('spire-restarting')).toBeVisible();
+  await expect.poll(() => navigations).toBe(2);
+  expect(checks).toBe(4);
+});
+
+test('offers a bounded reconnect retry without reinstalling the update', async ({ page }) => {
+  await installUpdateMocks(page);
+  let installs = 0;
+  let available = false;
+  let navigations = 0;
+  page.on('load', () => { navigations += 1; });
+  await page.route('**/api/v1/app/update', route => {
+    installs += 1;
+    return route.fulfill({ json: { data: { updated: true, version: '5.5.0' } } });
+  });
+  await page.route('**/api/v1/app/env?restartCheck=*', route => available
+    ? route.fulfill({ json: { data: { runtime_version: '5.5.0' } } })
+    : route.abort('connectionrefused'));
+  await page.goto('/');
+  await page.clock.install();
+  await page.getByTestId('install-spire-update').click();
+  await expect(page.getByTestId('spire-restarting')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('spire-restarting')).toBeVisible();
+  await page.clock.fastForward(121000);
+  await expect(page.getByTestId('spire-restart-timeout')).toBeVisible();
+  expect(navigations).toBe(1);
+  available = true;
+  await page.getByTestId('retry-spire-restart').click();
+  await page.clock.fastForward(1000);
+  await expect.poll(() => navigations).toBe(2);
+  expect(installs).toBe(1);
+});
+
+test('keeps Spire open and displays installation errors', async ({ page }) => {
+  await installUpdateMocks(page);
+  await page.route('**/api/v1/app/update', route => route.fulfill({
+    status: 500, json: { error: 'Could not stage the updated executable' },
+  }));
+  await page.goto('/');
+  await page.getByTestId('install-spire-update').click();
+  await expect(page.getByText('Could not stage the updated executable')).toBeVisible();
+  await expect(page.getByTestId('install-spire-update')).toBeEnabled();
+  await expect(page.getByTestId('spire-restarting')).toHaveCount(0);
+});
+
+test('releases the update dialog when an installation request times out', async ({ page }) => {
+  await installUpdateMocks(page);
+  await page.addInitScript(() => {
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+      if (this.timeout > 0) {
+        document.documentElement.dataset.updateRequestTimeout = String(this.timeout);
+        // Exercise the real browser timeout without waiting six minutes.
+        this.timeout = 100;
+      }
+      return originalSend.call(this, body);
+    };
+  });
+  let finishRequest: () => void = () => {};
+  const pending = new Promise<void>(resolve => { finishRequest = resolve; });
+  await page.route('**/api/v1/app/update', async route => {
+    await pending;
+    await route.abort().catch(() => {});
+  });
+  try {
+    await page.goto('/');
+    await page.getByTestId('install-spire-update').click();
+    await expect(page.getByText('Spire could not install the selected update.')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-update-request-timeout', '360000');
+    await expect(page.getByTestId('install-spire-update')).toBeEnabled();
+    await page.getByTestId('close-spire-update').click();
+    await expect(page.getByTestId('install-spire-update')).toHaveCount(0);
+  } finally {
+    finishRequest();
+  }
+});
