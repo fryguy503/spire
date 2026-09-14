@@ -1,4 +1,4 @@
-## [Unreleased] 9/14/2026
+## [5.7.1] 9/14/2026
 
 * Fixed missing Spell Critical Damage descriptions in spell previews, including Deadeye Discipline. Effect 155 now displays correctly.
 * Fixed Spell Critical Chance being incorrectly described as critical damage. Effect 170 now shows the chance modifier.
