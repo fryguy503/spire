@@ -1,3 +1,12 @@
+## [Unreleased] 9/14/2026
+
+* Spire now restarts automatically after updates on Windows and Linux. The built-in launcher updates with Spire.
+* Update restarts preserve launch settings and the desktop port without opening another browser tab.
+* The update window waits for the new version before reloading. If reconnection takes too long, you can retry without reinstalling.
+* Improved update reliability with safer executable replacement, download timeouts, and clearer error messages. Failed downloads leave Spire running.
+* Improved launcher shutdown and cleanup. Manually stopping Spire also stops its launcher without triggering an update restart.
+* Added an optional background launcher for development servers that prevents extra Windows console windows while preserving logs and child processes.
+
 ## [5.6.2] 9/13/2026
 
 * Fixed Server Admin incorrectly redirecting authorized users back to Home.
