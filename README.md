@@ -143,14 +143,18 @@ process.
 This behavior starts after you install and launch a release containing the new
 launcher. Older releases still use their existing restart behavior for that
 first update. Download or installation failures leave the running Spire process
-available and display an error. If reconnecting takes more than two minutes,
+available and display an error. Downloads have a five-minute limit across all
+retry attempts. The browser stops waiting for an installation response after
+six minutes and makes the update dialog usable again. If reconnecting takes more than two minutes,
 the update dialog offers **Try connecting again** without reinstalling.
 
 The launcher blocks while its worker runs; it does not poll for process health.
 If a worker ignores a stop request, the launcher terminates it after 10 seconds.
 A worker also exits if its launcher is forcibly terminated. Windows launcher
-handoffs time out after 30 seconds. Desktop readiness checks stop on success,
-reject server errors, and cancel outstanding requests when their timeout expires.
+handoffs time out after 30 seconds. Desktop readiness checks accept Basic Auth
+login challenges, reject server errors, and cancel outstanding requests when
+their timeout expires. Update preparation recreates its temporary directory if
+it was removed during the session.
 
 To verify the launcher on Windows or Linux, run:
 

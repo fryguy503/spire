@@ -306,7 +306,7 @@ func (d *Controller) update(c echo.Context) error {
 	if !ok {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Spire version metadata is unavailable"})
 	}
-	version, err := updater.NewUpdater(pJson).CheckForUpdates(false)
+	version, err := updater.NewUpdater(pJson).CheckForUpdates(c.Request().Context(), false)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}

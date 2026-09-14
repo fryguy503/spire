@@ -155,7 +155,10 @@ func waitForSiteToBeAvailable(URL string, timeout time.Duration) error {
 		response, err := client.Do(request)
 		if err == nil {
 			_ = response.Body.Close()
-			if response.StatusCode >= 200 && response.StatusCode < 300 {
+			// Basic Auth is handled by the browser after it opens. A login
+			// challenge confirms the server is ready without sending credentials.
+			if (response.StatusCode >= 200 && response.StatusCode < 300) ||
+				(response.StatusCode == gohttp.StatusUnauthorized && response.Header.Get("WWW-Authenticate") != "") {
 				return nil
 			}
 		}

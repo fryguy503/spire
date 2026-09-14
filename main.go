@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"github.com/EQEmuTools/spire/boot"
@@ -36,7 +37,7 @@ func main() {
 
 	// self update service
 	if len(os.Args) == 1 && !selfrestart.ResumedDesktop() {
-		if updated, err := updater.NewUpdater(packageJson).CheckForUpdates(true); err != nil {
+		if updated, err := updater.NewUpdater(packageJson).CheckForUpdates(context.Background(), true); err != nil {
 			log.Printf("Could not update Spire: %v", err)
 		} else if updated != "" {
 			if err := selfrestart.Prepare(); err != nil {

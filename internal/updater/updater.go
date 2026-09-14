@@ -3,14 +3,15 @@ package updater
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/EQEmuTools/spire/internal/download"
 	"github.com/EQEmuTools/spire/internal/env"
 	"github.com/EQEmuTools/spire/internal/eqemuserverconfig"
 	"github.com/EQEmuTools/spire/internal/logger"
@@ -75,7 +76,7 @@ func (s *Updater) getAppVersion() (error, EnvResponse) {
 
 // CheckForUpdates installs an eligible update and returns its version, or an
 // empty string when no update is needed. Errors leave the running app alive.
-func (s *Updater) CheckForUpdates(interactive bool) (string, error) {
+func (s *Updater) CheckForUpdates(ctx context.Context, interactive bool) (string, error) {
 	installMu.Lock()
 	defer installMu.Unlock()
 	if installedVersion != "" {
@@ -98,7 +99,7 @@ func (s *Updater) CheckForUpdates(interactive bool) (string, error) {
 		s.logger.Info().Msg("Running as go run main.go, ignoring updates")
 		return "", nil
 	}
-	status, selected, err := s.resolveUpdate(context.Background())
+	status, selected, err := s.resolveUpdate(ctx)
 	if err != nil {
 		return "", fmt.Errorf("resolve Spire release: %w", err)
 	}
@@ -113,7 +114,12 @@ func (s *Updater) CheckForUpdates(interactive bool) (string, error) {
 	defer os.RemoveAll(tmpdir)
 	archiveName := targetReleaseAssetName(s.goos, s.goarch)
 	downloadPath := filepath.Join(tmpdir, archiveName)
-	if err := download.WithProgress(downloadPath, selected.asset.GetBrowserDownloadURL()); err != nil {
+	downloadCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if err := downloadUpdate(downloadCtx, downloadPath, selected.asset.GetBrowserDownloadURL()); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", fmt.Errorf("Spire update download timed out; try again: %w", err)
+		}
 		return "", fmt.Errorf("download Spire update: %w", err)
 	}
 	if err := s.unzipper.Extract(downloadPath, tmpdir); err != nil {
@@ -121,6 +127,9 @@ func (s *Updater) CheckForUpdates(interactive bool) (string, error) {
 	}
 	// The Windows archive contains an .exe; the Linux archive does not.
 	source := filepath.Join(tmpdir, strings.TrimSuffix(archiveName, ".zip"))
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if err := installExecutable(source, executable); err != nil {
 		return "", err
 	}

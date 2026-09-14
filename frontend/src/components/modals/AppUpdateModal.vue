@@ -293,7 +293,8 @@ export default {
       this.error = "";
 
       try {
-        const response = await SpireApi.v1().post("app/update");
+        // Allow the server's five-minute download limit plus installation time.
+        const response = await SpireApi.v1().post("app/update", null, {timeout: 360000});
         if (response.status === 200 && response.data?.data?.updated === true) {
           LocalSettings.clearUpdateVariables();
           this.updating = false;

@@ -5,6 +5,7 @@ package updater
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,12 +76,27 @@ func testUpdateAndRestart(t *testing.T, mode string) {
 	var mu sync.Mutex
 	offered, invalidArchive := "1.0.0", false
 	var hold, entered chan struct{}
+	stallAsset := false
+	assetEntered, assetCanceled, releaseAsset := make(chan struct{}, 1), make(chan struct{}, 1), make(chan struct{})
 	var releaseServer *httptest.Server
 	releaseServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		version, invalid, blocked, received := offered, invalidArchive, hold, entered
+		stall := stallAsset
 		mu.Unlock()
 		if r.URL.Path == "/asset.zip" {
+			if stall {
+				w.Header().Set("Content-Length", "1000")
+				_, _ = w.Write([]byte("partial archive"))
+				w.(http.Flusher).Flush()
+				assetEntered <- struct{}{}
+				select {
+				case <-r.Context().Done():
+					assetCanceled <- struct{}{}
+				case <-releaseAsset:
+				}
+				return
+			}
 			if invalid {
 				_, _ = w.Write([]byte("invalid archive"))
 				return
@@ -99,6 +115,7 @@ func testUpdateAndRestart(t *testing.T, mode string) {
 		}})
 	}))
 	defer releaseServer.Close()
+	defer close(releaseAsset)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +128,8 @@ func testUpdateAndRestart(t *testing.T, mode string) {
 	command.Dir = dir
 	command.Env = append(os.Environ(), "APP_ENV=local", "SPIRE_RELEASE_REPO=Fixture/Spire", "SPIRE_TEST_RELEASE_URL="+releaseServer.URL, "SPIRE_TEST_MARKER=preserved")
 	command.Env = append(command.Env, "SPIRE_RESTART_MODE="+mode)
+	launcherTemp := t.TempDir()
+	command.Env = append(command.Env, "TMPDIR="+launcherTemp, "TMP="+launcherTemp, "TEMP="+launcherTemp)
 	logFile, err := os.Create(filepath.Join(dir, "fixture.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -201,6 +220,13 @@ func testUpdateAndRestart(t *testing.T, mode string) {
 		return response.StatusCode, body, err
 	}
 	original := waitVersion("1.0.0")
+	handoffs, err := filepath.Glob(filepath.Join(launcherTemp, "spire-restart-*"))
+	if err != nil || len(handoffs) != 1 {
+		t.Fatalf("launcher handoff directories = %v, %v", handoffs, err)
+	}
+	if err := os.Remove(handoffs[0]); err != nil {
+		t.Fatal(err)
+	}
 	if code, body, err := postUpdate(); err != nil || code != 200 || !bytes.Contains(body, []byte(`"updated":false`)) {
 		t.Fatalf("no update: %d %s %v", code, body, err)
 	}
@@ -212,6 +238,54 @@ func testUpdateAndRestart(t *testing.T, mode string) {
 	}
 	if state := waitVersion("1.0.0"); state.PID != original.PID {
 		t.Fatal("failed update restarted Spire")
+	}
+	mu.Lock()
+	invalidArchive, stallAsset = false, true
+	mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/app/update", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aborted := make(chan error, 1)
+	go func() {
+		response, err := client.Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		aborted <- err
+	}()
+	select {
+	case <-assetEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("update did not begin downloading")
+	}
+	cancel()
+	if err := <-aborted; err == nil {
+		t.Fatal("canceled installation request succeeded")
+	}
+	select {
+	case <-assetCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("download survived the canceled installation request")
+	}
+	mu.Lock()
+	offered, stallAsset = "1.0.0", false
+	mu.Unlock()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		code, body, err := postUpdate()
+		if code == 200 && err == nil && bytes.Contains(body, []byte(`"updated":false`)) {
+			break
+		}
+		if code != 409 || time.Now().After(deadline) {
+			t.Fatalf("canceled update did not release its lock: %d %s %v", code, body, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if state := waitVersion("1.0.0"); state.PID != original.PID {
+		t.Fatal("canceled download restarted Spire")
 	}
 	for _, version := range []string{"2.0.0", "3.0.0"} {
 		mu.Lock()

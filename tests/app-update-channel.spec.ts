@@ -288,3 +288,35 @@ test('keeps Spire open and displays installation errors', async ({ page }) => {
   await expect(page.getByTestId('install-spire-update')).toBeEnabled();
   await expect(page.getByTestId('spire-restarting')).toHaveCount(0);
 });
+
+test('releases the update dialog when an installation request times out', async ({ page }) => {
+  await installUpdateMocks(page);
+  await page.addInitScript(() => {
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+      if (this.timeout > 0) {
+        document.documentElement.dataset.updateRequestTimeout = String(this.timeout);
+        // Exercise the real browser timeout without waiting six minutes.
+        this.timeout = 100;
+      }
+      return originalSend.call(this, body);
+    };
+  });
+  let finishRequest: () => void = () => {};
+  const pending = new Promise<void>(resolve => { finishRequest = resolve; });
+  await page.route('**/api/v1/app/update', async route => {
+    await pending;
+    await route.abort().catch(() => {});
+  });
+  try {
+    await page.goto('/');
+    await page.getByTestId('install-spire-update').click();
+    await expect(page.getByText('Spire could not install the selected update.')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-update-request-timeout', '360000');
+    await expect(page.getByTestId('install-spire-update')).toBeEnabled();
+    await page.getByTestId('close-spire-update').click();
+    await expect(page.getByTestId('install-spire-update')).toHaveCount(0);
+  } finally {
+    finishRequest();
+  }
+});

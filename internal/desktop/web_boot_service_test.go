@@ -6,7 +6,23 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	spiremiddleware "github.com/EQEmuTools/spire/internal/http/middleware"
+	"github.com/labstack/echo/v4"
 )
+
+func TestReadinessAcceptsBasicAuthChallenge(t *testing.T) {
+	e := echo.New()
+	e.Use(spiremiddleware.BasicAuth(func(username, password string, _ echo.Context) (bool, error) {
+		return username == "test-user" && password == "test-password", nil
+	}))
+	e.GET("/", func(c echo.Context) error { return c.String(http.StatusOK, "ready") })
+	server := httptest.NewServer(e)
+	defer server.Close()
+	if err := waitForSiteToBeAvailable(server.URL, time.Second); err != nil {
+		t.Fatalf("healthy Basic Auth server rejected by desktop readiness: %v", err)
+	}
+}
 
 func TestReadinessStopsAfterSuccess(t *testing.T) {
 	var requests atomic.Int32

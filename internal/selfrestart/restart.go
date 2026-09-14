@@ -93,6 +93,11 @@ func Prepare() error {
 	if err != nil {
 		return err
 	}
+	// Temporary-file maintenance may remove the empty directory during a
+	// long-running session. Restore it before preparing the next handoff.
+	if err := os.MkdirAll(filepath.Dir(statePath), 0700); err != nil {
+		return err
+	}
 	return os.WriteFile(statePath, data, 0600)
 }
 

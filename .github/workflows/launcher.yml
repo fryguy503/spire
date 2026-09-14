@@ -43,7 +43,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           CGO_ENABLED: '1'
-        run: go test -race -timeout=10m ./internal/selfrestart ./internal/desktop
+        run: go test -race -timeout=10m ./internal/selfrestart ./internal/desktop ./internal/updater
       - name: Save performance measurements
         if: always()
         uses: actions/upload-artifact@v4

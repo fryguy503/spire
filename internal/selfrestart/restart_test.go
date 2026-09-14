@@ -40,6 +40,31 @@ func TestPrepareRestartHandoff(t *testing.T) {
 	}
 }
 
+func TestPrepareAfterTemporaryDirectoryCleanup(t *testing.T) {
+	previous := statePath
+	t.Cleanup(func() { statePath = previous })
+	t.Setenv("SPIRE_RESTART_MODE", "self")
+	directory := filepath.Join(t.TempDir(), "spire-restart-test")
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	statePath = filepath.Join(directory, "state.json")
+	if err := os.Remove(directory); err != nil {
+		t.Fatal(err)
+	}
+	if err := Prepare(); err != nil {
+		t.Fatalf("temporary-directory cleanup disabled future updates: %v", err)
+	}
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state restartState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("recreated handoff is unreadable: %v", err)
+	}
+}
+
 func TestSupervisorPropagatesExitWithoutRestart(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
