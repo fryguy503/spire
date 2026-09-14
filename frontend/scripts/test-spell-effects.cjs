@@ -147,7 +147,6 @@ test('new damage renderers retain formula scaling and caps', async () => {
   for (const [id, label, suffix] of [
     [155, 'Critical Nuke Damage', '% of Base Damage'],
     [504, 'Rear Arc Melee Damage Amount', ''],
-    [508, 'Spell Power', ' (Focus Spell DOT, DD and Healing)'],
   ]) {
     const spell = makeSpell();
     setEffect(spell, 3, id, 100, 0, 180, 102);
@@ -158,6 +157,17 @@ test('new damage renderers retain formula scaling and caps', async () => {
     setEffect(spell, 3, id, 100, 0, 80);
     const capped = await Spells.getSpellEffectInfo(spell, 3);
     assert.equal(capped.info, `3) Increase ${label} by 80${suffix}`);
+  }
+});
+
+test('effect 508 uses the raw focus amount regardless of Formula and Max', async () => {
+  for (const base of [-100, 0, 100]) {
+    for (const [formula, max] of [[100, 80], [102, 180], [102, 0]]) {
+      const spell = makeSpell();
+      setEffect(spell, 3, 508, base, 0, max, formula);
+      const result = await Spells.getSpellEffectInfo(spell, 3);
+      assert.equal(result.info, `3) ${base < 0 ? 'Decrease' : 'Increase'} Spell Power by ${Math.abs(base)} (Focus Spell DOT, DD and Healing)`);
+    }
   }
 });
 

@@ -2377,7 +2377,8 @@ export class Spells {
           break;
 
         case 508:
-          printBuffer += this.getFormatStandard("Spell Power", "", value_min, value_max, minlvl, maxlvl) + " (Focus Spell DOT, DD and Healing)"
+          // Focus amounts use the raw base value.
+          printBuffer += this.getFormatStandard("Spell Power", "", base, base, minlvl, maxlvl) + " (Focus Spell DOT, DD and Healing)"
           break;
 
         case 509:
