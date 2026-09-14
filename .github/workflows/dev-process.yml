@@ -1,0 +1,39 @@
+name: Background development processes
+
+on:
+  pull_request:
+    paths:
+      - 'tools/dev-process/**'
+      - '.github/workflows/dev-process.yml'
+      - 'package.json'
+      - 'go.mod'
+  push:
+    branches: [master]
+    paths:
+      - 'tools/dev-process/**'
+      - '.github/workflows/dev-process.yml'
+      - 'package.json'
+      - 'go.mod'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  background-process:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v5
+        if: runner.os == 'Windows'
+        with:
+          go-version-file: go.mod
+      - run: npm run test:dev-process

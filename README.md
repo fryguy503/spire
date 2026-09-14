@@ -446,6 +446,10 @@ At this point the installation should be complete and you should have everything
 
 ### Windows - Running Development Watchers
 
+To run development processes without extra console windows, use the
+[background process launcher](tools/dev-process/README.md). It captures logs
+and reports the PID to use when stopping that process and its children.
+
 To run the backend and frontend development servers in Windows; there are simply two top level batch scripts that you can run
 
 * `windows-backend-web.bat` This will run the Golang backend web process on port 3001 (in windows) and will reload when any changes are made to the codebase
