@@ -1119,6 +1119,8 @@
                         <router-link
                           class="btn btn-sm btn-outline-info"
                           :to="itemEditorPath(detail.item_id)"
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
                           Open
                         </router-link>
