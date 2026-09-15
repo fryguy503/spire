@@ -1,3 +1,8 @@
+## [Unreleased] 9/14/2026
+
+* Fixed Open buttons in the item editor’s Evolution Chain table. Each now opens the selected item in a new browser tab, preserving the current editor and unsaved changes.
+* Added a Feedback button to the sidebar that opens GitHub’s issue form in a new tab.
+
 ## [5.7.1] 9/14/2026
 
 * Fixed missing Spell Critical Damage descriptions in spell previews, including Deadeye Discipline. Effect 155 now displays correctly.
