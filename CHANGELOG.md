@@ -1,4 +1,4 @@
-## [Unreleased] 9/16/2026
+## [5.7.3] 9/16/2026
 
 **Race/Model Viewer**
 * Integrated model codes, archive filenames, and zone locations directly into the Race Viewer using the Clumsy’s World RoF2 reference.
