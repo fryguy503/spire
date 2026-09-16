@@ -1,3 +1,15 @@
+## [Unreleased] 9/16/2026
+
+**Race/Model Viewer**
+* Integrated model codes, archive filenames, and zone locations directly into the Race Viewer using the Clumsy’s World RoF2 reference.
+* Added searches by race, ID, model code, archive, and zone, plus zone filtering with optional global models.
+* Clearly identified local, imported, and global model sources.
+* Added one-click copying of model/archive pairs, such as CLM,steamfont_chr.
+* Made the new Model Locations layout the default, with a Classic Gallery toggle that preserves filters and selection.
+* Matched both viewer panes to the available page height, with independent internal scrolling.
+* Expanded the reference inventory to 731 races and corrected missing single-gender model codes and truncated race names.
+* Improved mobile layout, missing-preview handling, and loading-error recovery.
+
 ## [5.7.2] 9/15/2026
 
 * Fixed Open buttons in the item editor’s Evolution Chain table. Each now opens the selected item in a new browser tab, preserving the current editor and unsaved changes.
