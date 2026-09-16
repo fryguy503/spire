@@ -1152,18 +1152,22 @@ export default {
       const heading = `## [Unreleased] ${this.today}\n\n* \n\n`;
       this.content = heading + this.content.replace(/^\s+/, "");
       this.markDirty();
+      const pos = heading.indexOf("* ") + 2;
+      this.restoreEditorSelection(pos, pos, {top: 0, left: 0});
+    },
+    restoreEditorSelection(start, end, scrollPosition) {
       this.$nextTick(() => {
         const editor = this.$refs.editor;
         if (editor) {
           editor.focus({preventScroll: true});
-          const pos = heading.indexOf("* ") + 2;
-          editor.setSelectionRange(pos, pos);
-          editor.scrollTop = 0;
-          editor.scrollLeft = 0;
-          window.requestAnimationFrame(() => {
-            editor.scrollTop = 0;
-            editor.scrollLeft = 0;
-          });
+          editor.setSelectionRange(start, end);
+          const restoreScroll = () => {
+            editor.scrollTop = scrollPosition.top;
+            editor.scrollLeft = scrollPosition.left;
+          };
+          restoreScroll();
+          // Updating the textarea value can schedule a caret scroll for the next frame.
+          window.requestAnimationFrame(restoreScroll);
         }
       });
     },
@@ -1177,13 +1181,11 @@ export default {
         return;
       }
       const start = editor.selectionStart || 0;
+      const scrollPosition = {top: editor.scrollTop, left: editor.scrollLeft};
       const lineStart = this.content.lastIndexOf("\n", start - 1) + 1;
       this.content = this.content.slice(0, lineStart) + prefix + this.content.slice(lineStart);
       this.markDirty();
-      this.$nextTick(() => {
-        editor.focus();
-        editor.setSelectionRange(start + prefix.length, start + prefix.length);
-      });
+      this.restoreEditorSelection(start + prefix.length, start + prefix.length, scrollPosition);
     },
     insertLink() {
       this.insertBlock("[", "](https://example.com)", "link text");
@@ -1206,17 +1208,15 @@ export default {
 
       const start = editor.selectionStart || 0;
       const end = editor.selectionEnd || start;
+      const scrollPosition = {top: editor.scrollTop, left: editor.scrollLeft};
       const selected = this.content.slice(start, end) || placeholder;
       const inserted = before + selected + after;
       this.content = this.content.slice(0, start) + inserted + this.content.slice(end);
       this.markDirty();
 
-      this.$nextTick(() => {
-        editor.focus();
-        const selectionStart = start + before.length;
-        const selectionEnd = selectionStart + selected.length;
-        editor.setSelectionRange(selectionStart, selectionEnd);
-      });
+      const selectionStart = start + before.length;
+      const selectionEnd = selectionStart + selected.length;
+      this.restoreEditorSelection(selectionStart, selectionEnd, scrollPosition);
     }
   }
 };

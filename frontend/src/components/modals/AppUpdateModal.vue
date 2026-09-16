@@ -1,9 +1,9 @@
 <template>
   <EqModal
+    class="spire-update-modal"
     title="Spire Updates"
     :dismissible="!updating && !reloading"
     @close="$emit('close')"
-    size="xl"
   >
     <template #body>
       <div v-if="!reloading">
@@ -53,7 +53,7 @@
           class="available-release mt-3"
           data-testid="available-update"
         >
-          <div class="d-flex flex-wrap align-items-center justify-content-between">
+          <div class="available-release-header">
             <div>
               <span class="update-kicker">Available update</span>
               <h3 class="mb-0">
@@ -143,10 +143,10 @@
     </template>
 
     <template #footer>
-      <div class="mt-3 d-flex flex-wrap align-items-center">
+      <div class="update-actions">
         <button
           @click="$emit('close')"
-          class="btn btn-sm mr-3 btn-default"
+          class="btn btn-sm btn-default"
           v-if="!reloading && !updating"
           data-testid="close-spire-update"
         >
@@ -155,7 +155,7 @@
 
         <button
           @click="$emit('ignore')"
-          class="btn btn-sm mr-3 btn-default"
+          class="btn btn-sm btn-default"
           v-if="!reloading && !updating && hasRelease"
         >
           <i class="fe fe-eye-off"></i> Skip this version
@@ -163,7 +163,7 @@
 
         <button
           @click="$emit('retry')"
-          class="btn btn-sm mr-3 btn-primary"
+          class="btn btn-sm btn-primary"
           v-if="!reloading && statusError"
         >
           <i class="fe fe-refresh-cw"></i> Retry
@@ -172,7 +172,7 @@
         <button
           v-if="restartTimedOut"
           @click="waitForRestart"
-          class="btn btn-sm mr-3 btn-primary"
+          class="btn btn-sm btn-primary"
           data-testid="retry-spire-restart"
         >
           <i class="fe fe-refresh-cw"></i> Try connecting again
@@ -180,7 +180,7 @@
 
         <button
           @click="updateSpire"
-          class="btn btn-sm mr-3"
+          class="btn btn-sm"
           :class="releaseType === 'Beta' ? 'btn-warning' : 'btn-success'"
           :disabled="updating || checking"
           v-if="!reloading && hasRelease"
@@ -352,6 +352,83 @@ export default {
 </script>
 
 <style scoped>
+.spire-update-modal {
+  display: flex;
+}
+
+.spire-update-modal ::v-deep .eq-modal-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+}
+
+.spire-update-modal ::v-deep .eq-modal-container {
+  display: flex;
+  flex-direction: column;
+  width: 1100px;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+/* EQWindow wraps the body and footer in a slot container. Allow it to shrink
+   so only the body scrolls, leaving the title and actions in view. */
+.spire-update-modal ::v-deep .eq-modal-container > div:not(.eq-window-title-bar) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.spire-update-modal ::v-deep .eq-modal-body {
+  min-height: 0;
+  max-height: none;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+.spire-update-modal ::v-deep .eq-modal-footer {
+  flex-shrink: 0;
+}
+
+.available-release-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.available-release-header > div {
+  min-width: 0;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+}
+
+.spire-update-modal ::v-deep .markdown-body pre,
+.spire-update-modal ::v-deep .markdown-body table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.spire-update-modal ::v-deep .markdown-body table {
+  display: block;
+}
+
+.spire-update-modal ::v-deep .markdown-body img {
+  height: auto;
+}
+
 .update-channel-panel,
 .available-release,
 .update-state {
@@ -419,9 +496,58 @@ export default {
   color: #a9e0c1;
 }
 
+@media (max-width: 991px) {
+  .spire-update-modal {
+    height: 100dvh;
+  }
+
+  .update-actions .btn,
+  .available-release-header .eq-button-fancy {
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 767px) {
+  .spire-update-modal ::v-deep .eq-modal-wrapper {
+    padding: 20px 12px;
+    padding: max(20px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .spire-update-modal ::v-deep .eq-modal-container {
+    padding: 20px 12px 12px;
+  }
+
+  .update-channel-panel,
+  .available-release,
+  .update-state {
+    padding: 12px;
+  }
+
   .update-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .update-actions .btn {
+    flex: 1 1 auto;
+    white-space: normal;
+  }
+
+  .available-release-header .eq-button-fancy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 479px) {
+  .update-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .update-actions .btn:last-child {
+    grid-column: 1 / -1;
   }
 }
 </style>
