@@ -28,7 +28,7 @@
 
       <div v-if="!initialLoading">
         <div class="row mb-3">
-          <div class="col-2 text-center font-weight-bold">
+          <div v-if="canRead('player_event_log_settings')" class="col-2 text-center font-weight-bold">
             Event Type
             <select
               class="form-control form-control-prepended list-search"
@@ -305,6 +305,7 @@
 </template>
 
 <script>
+import {canReadAdminApi} from "@/app/user/server-admin-access";
 import EqWindow                    from "@/components/eq-ui/EQWindow.vue";
 import {SpireApi}                  from "@/app/api/spire-api";
 import {PlayerEventLogApi}         from "@/app/api/api/player-event-log-api";
@@ -443,6 +444,7 @@ export default {
     }
   },
   methods: {
+    canRead: canReadAdminApi,
 
     getZoneLongName(zoneId) {
       const z = Zones.getZoneByIdSync(zoneId)
@@ -874,9 +876,9 @@ export default {
     this.requesting = false;
 
     this.loadQueryState()
-    const r = await (new PlayerEventLogSettingApi(...SpireApi.cfg())).listPlayerEventLogSettings()
-    if (r.status === 200) {
-      this.settings = r.data
+    if (this.canRead('player_event_log_settings')) {
+      const r = await (new PlayerEventLogSettingApi(...SpireApi.cfg())).listPlayerEventLogSettings()
+      if (r.status === 200) this.settings = r.data
     }
 
     this.startTimer()

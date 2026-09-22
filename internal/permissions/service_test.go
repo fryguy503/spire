@@ -5,8 +5,91 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/EQEmuTools/spire/internal/database"
+	"github.com/EQEmuTools/spire/internal/models"
+	"github.com/gertd/go-pluralize"
 	"github.com/labstack/echo/v4"
+	gocache "github.com/patrickmn/go-cache"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
+
+func TestPermissionCacheDoesNotReuseOwnershipForAnotherConnection(t *testing.T) {
+	// Dry-run queries produce no grants for connection 2 without contacting a DB.
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		DSN: "qa@tcp(127.0.0.1:1)/qa", SkipInitializeWithVersion: true,
+	}), &gorm.Config{DryRun: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pool.Close() })
+	cache := gocache.New(gocache.NoExpiration, 0)
+	cache.Set("user-permissions-2", userPermissions{
+		connectionID: 1, isConnectionOwner: true,
+	}, gocache.NoExpiration)
+	resolver := database.NewResolver(database.NewConnections(db, nil, nil), nil, nil, cache)
+	service := NewService(resolver, cache, nil, pluralize.NewClient())
+	e := echo.New()
+	context := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/admin/serverconfig", nil), httptest.NewRecorder())
+	user := models.User{ID: 2}
+	if !service.CanAccessResource(context, user, 1) {
+		t.Fatal("the owned connection should be accessible")
+	}
+	if service.CanAccessResource(context, user, 2) {
+		t.Fatal("ownership of connection 1 must not grant access to connection 2")
+	}
+	cached, _ := cache.Get("user-permissions-2")
+	if cached.(userPermissions).connectionID != 2 {
+		t.Fatal("the cache should now describe the newly selected connection")
+	}
+}
+
+func TestConnectionPermissionsWithoutInstanceAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		method      string
+		permissions userPermissions
+		want        bool
+	}{
+		{name: "all read", method: http.MethodGet, permissions: userPermissions{canReadAll: true}, want: true},
+		{name: "all write", method: http.MethodPut, permissions: userPermissions{canWriteAll: true}, want: true},
+		{name: "read only cannot write", method: http.MethodPut, permissions: userPermissions{canReadAll: true}},
+		{name: "write only cannot read", method: http.MethodGet, permissions: userPermissions{canWriteAll: true}},
+		{name: "no grants cannot read", method: http.MethodGet},
+		{name: "connection owner", method: http.MethodPut, permissions: userPermissions{isConnectionOwner: true}, want: true},
+		{
+			name: "scoped server read", method: http.MethodGet, want: true,
+			permissions: userPermissions{permissions: []Resource{{
+				RouteMatchPrefixes: []string{"admin/serverconfig"}, CanRead: true,
+			}}},
+		},
+		{
+			name: "unrelated grant cannot read", method: http.MethodGet,
+			permissions: userPermissions{permissions: []Resource{{
+				RouteMatchPrefixes: []string{"items"}, CanRead: true, CanWrite: true,
+			}}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := gocache.New(gocache.NoExpiration, 0)
+			// Seed the same permission cache used after resolving a connection.
+			tc.permissions.connectionID = 1
+			cache.Set("user-permissions-2", tc.permissions, gocache.NoExpiration)
+			service := &Service{cache: cache}
+			e := echo.New()
+			request := httptest.NewRequest(tc.method, "/api/v1/admin/serverconfig", nil)
+			context := e.NewContext(request, httptest.NewRecorder())
+			user := models.User{ID: 2, IsAdmin: false}
+			if got := service.CanAccessResource(context, user, 1); got != tc.want {
+				t.Errorf("CanAccessResource() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestIsWriteRequestIncludesDelete(t *testing.T) {
 	service := &Service{}
@@ -18,6 +101,36 @@ func TestIsWriteRequestIncludesDelete(t *testing.T) {
 		if !service.IsWriteRequest(context) {
 			t.Errorf("IsWriteRequest(%s) = false, want true", method)
 		}
+	}
+}
+
+func TestServerUtilityPermissions(t *testing.T) {
+	for _, tc := range []struct {
+		resource string
+		path     string
+		method   string
+	}{
+		{"Server Database Backup", "/api/v1/backup/mysql", http.MethodPost},
+		{"Server Database Backup", "/api/v1/backup/mysql-dump-download/test.sql", http.MethodGet},
+		{"Server Process Management", "/api/v1/admin/launcherconfig", http.MethodGet},
+		{"Server Process Management", "/api/v1/admin/launcherconfig", http.MethodPost},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			cache := gocache.New(gocache.NoExpiration, 0)
+			service := &Service{cache: cache}
+			cache.Set("user-permissions-2", userPermissions{
+				connectionID: 1,
+				permissions: []Resource{{
+					RouteMatchPrefixes: service.RegisterManualResources()[tc.resource],
+					CanRead:            true, CanWrite: tc.method == http.MethodPost,
+				}},
+			}, gocache.NoExpiration)
+			e := echo.New()
+			context := e.NewContext(httptest.NewRequest(tc.method, tc.path, nil), httptest.NewRecorder())
+			if !service.CanAccessResource(context, models.User{ID: 2}, 1) {
+				t.Fatal("the tool's named permission must authorize its endpoint")
+			}
+		})
 	}
 }
 

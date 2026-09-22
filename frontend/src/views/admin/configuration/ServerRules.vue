@@ -103,6 +103,7 @@
 </template>
 
 <script>
+import {canWriteAdminApi} from "@/app/user/server-admin-access";
 import {ROUTE}             from "@/routes";
 import EqWindow            from "@/components/eq-ui/EQWindow.vue";
 import EqCheckbox          from "@/components/eq-ui/EQCheckbox.vue";
@@ -193,6 +194,7 @@ export default {
           this.notification = `Updated rule (${e.ruleset_id}) [${e.rule_name}] to value (${e.rule_value})!`
           this.loadRules()
 
+          if (!canWriteAdminApi('eqemuserver/reload/rules')) return
           const r = await SpireApi.v1().post("eqemuserver/reload/rules")
           if (r.status === 200) {
             setTimeout(() => {

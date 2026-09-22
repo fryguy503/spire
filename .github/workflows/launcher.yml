@@ -1,0 +1,52 @@
+name: Launcher reliability
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/launcher.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'main.go'
+      - 'internal/**'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/launcher.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'main.go'
+      - 'internal/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launcher:
+    name: Launcher on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test faults, updates, and repeated restarts
+        env:
+          SPIRE_LAUNCHER_QA_REPORT: ${{ runner.temp }}/launcher-qa.json
+        run: go test -timeout=10m -tags=integration ./internal/updater ./internal/selfrestart ./internal/desktop ./internal/app ./internal/permissions -v
+      - name: Check for races
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: '1'
+        run: go test -race -timeout=10m ./internal/selfrestart ./internal/desktop ./internal/updater
+      - name: Save performance measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-qa-${{ runner.os }}
+          path: ${{ runner.temp }}/launcher-qa.json

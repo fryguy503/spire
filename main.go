@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"github.com/EQEmuTools/spire/boot"
 	"github.com/EQEmuTools/spire/internal/console"
 	"github.com/EQEmuTools/spire/internal/env"
+	"github.com/EQEmuTools/spire/internal/selfrestart"
 	spiresentry "github.com/EQEmuTools/spire/internal/sentry"
 	"github.com/EQEmuTools/spire/internal/updater"
 	"github.com/henvic/httpretty"
@@ -16,6 +18,13 @@ import (
 )
 
 func main() {
+	if handled, code, err := selfrestart.Run(); handled {
+		if err != nil {
+			log.Print(err)
+		}
+		os.Exit(code)
+	}
+	updater.CleanupOldExecutables()
 	// uncomment for profiling
 	//f, err := os.Create("main.prof")
 	//if err != nil {
@@ -27,9 +36,15 @@ func main() {
 	registerHttpLogging()
 
 	// self update service
-	if len(os.Args) == 1 {
-		if updater.NewUpdater(packageJson).CheckForUpdates(true) {
-			os.Exit(0)
+	if len(os.Args) == 1 && !selfrestart.ResumedDesktop() {
+		if updated, err := updater.NewUpdater(packageJson).CheckForUpdates(context.Background(), true); err != nil {
+			log.Printf("Could not update Spire: %v", err)
+		} else if updated != "" {
+			if err := selfrestart.Prepare(); err != nil {
+				log.Printf("Could not restart Spire: %v", err)
+			} else {
+				selfrestart.Exit()
+			}
 		}
 	}
 

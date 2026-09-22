@@ -1,6 +1,6 @@
 {
   "name": "spire",
-  "version": "5.7.0",
+  "version": "5.7.3",
   "spire": {
     "release_repository": "Valorith/spire"
   },
@@ -9,6 +9,8 @@
     "url": "https://github.com/EQEmuTools/spire.git"
   },
   "scripts": {
+    "dev:background": "node tools/dev-process/cli.mjs",
+    "test:dev-process": "node tools/dev-process/test.mjs",
     "serve:sage-preview": "node scripts/serve-sage-preview.js",
     "qa:sage": "node --expose-gc tools/sage-qa/run.mjs",
     "qa:sage:smoke": "node --expose-gc tools/sage-qa/run.mjs --profile smoke",

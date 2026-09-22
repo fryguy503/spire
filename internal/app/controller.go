@@ -10,6 +10,7 @@ import (
 	"github.com/EQEmuTools/spire/internal/http/routes"
 	"github.com/EQEmuTools/spire/internal/models"
 	"github.com/EQEmuTools/spire/internal/release"
+	"github.com/EQEmuTools/spire/internal/selfrestart"
 	"github.com/EQEmuTools/spire/internal/spire"
 	"github.com/EQEmuTools/spire/internal/spirechangelog"
 	"github.com/EQEmuTools/spire/internal/updater"
@@ -37,6 +38,7 @@ type Controller struct {
 	db               *database.Resolver
 	changelogService *spirechangelog.Service
 	serverConfig     *eqemuserverconfig.Config
+	updateMu         sync.Mutex
 }
 
 // NewController returns a new app controller
@@ -99,6 +101,7 @@ type Features struct {
 type EnvResponse struct {
 	Env                       string                `json:"env"`
 	Version                   string                `json:"version"`
+	RuntimeVersion            string                `json:"runtime_version"`
 	IsBetaRelease             bool                  `json:"is_beta_release"`
 	ReleaseRepository         string                `json:"release_repository"`
 	UpdateChannel             updater.UpdateChannel `json:"update_channel"`
@@ -164,6 +167,7 @@ func (d *Controller) env(c echo.Context) error {
 			Env:               env.Get("APP_ENV", "local"),
 			OS:                runtime.GOOS,
 			Version:           version,
+			RuntimeVersion:    pkg.Version,
 			IsBetaRelease:     isBetaRelease,
 			ReleaseRepository: releaseRepository,
 			UpdateChannel:     updateChannel,
@@ -283,18 +287,38 @@ func (d *Controller) update(c echo.Context) error {
 	if !env.IsAppEnvLocal() {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Cannot update in non-local environment"})
 	}
+	if !d.updateMu.TryLock() {
+		return c.JSON(http.StatusConflict, echo.Map{"error": "A Spire update is already in progress"})
+	}
+	// Keep the lock after success so another request cannot schedule a second restart.
+	restarting := false
+	defer func() {
+		if !restarting {
+			d.updateMu.Unlock()
+		}
+	}()
+	if err := selfrestart.Prepare(); err != nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"error": err.Error()})
+	}
 
 	data, _ := d.cache.Get("packageJson")
 	pJson, ok := data.([]byte)
-	if ok {
-		if updater.NewUpdater(pJson).CheckForUpdates(false) {
-			go func() {
-				fmt.Println("Automatically shutting down in 1 second...")
-				time.Sleep(1 * time.Second)
-				os.Exit(0)
-			}()
-			return c.JSON(http.StatusOK, echo.Map{"data": echo.Map{"updated": true}})
-		}
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Spire version metadata is unavailable"})
+	}
+	version, err := updater.NewUpdater(pJson).CheckForUpdates(c.Request().Context(), false)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	if version != "" {
+		restarting = true
+		err := c.JSON(http.StatusOK, echo.Map{"data": echo.Map{"updated": true, "version": version}})
+		c.Response().Flush()
+		go func() {
+			time.Sleep(time.Second)
+			selfrestart.Exit()
+		}()
+		return err
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"data": echo.Map{"updated": false}})

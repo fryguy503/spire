@@ -6,12 +6,11 @@ import (
 	"github.com/anaskhan96/soup"
 	"github.com/spf13/cobra"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RaceModelMapsCommand struct {
@@ -61,38 +60,84 @@ type RaceEntry struct {
 }
 
 type RaceData struct {
-	Race []RaceEntry `json:"races"`
+	SourceURL string      `json:"source_url"`
+	Client    string      `json:"client"`
+	Race      []RaceEntry `json:"races"`
 }
 
 func NewRaceModelMapsCommand() *RaceModelMapsCommand {
 	i := &RaceModelMapsCommand{
 		command: &cobra.Command{
 			Use:   "make:race-model-maps",
-			Short: "Generates race model maps from Shendares data export",
+			Short: "Generates race model maps from the Clumsy’s World RoF2 reference",
 		},
 	}
 
 	i.command.Args = i.Validate
-	i.command.Run = i.Handle
+	i.command.RunE = i.Handle
+	i.command.Flags().String("source-file", "", "Read a saved reference HTML file instead of downloading it")
 
 	return i
 }
 
 // Handle implementation of the Command interface
-func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) {
-	rd := RaceData{}
+const raceInventorySourceURL = "https://races.clumsysworld.com/"
 
-	contents := c.FetchAndCache("http://www.shendare.com/EQ/Emu/EQRI/RoF2_EQRaces.htm", "races.html")
+func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) error {
+	sourceFile, _ := cmd.Flags().GetString("source-file")
+	var contents []byte
+	var err error
+	if sourceFile != "" {
+		contents, err = os.ReadFile(sourceFile)
+	} else {
+		client := &http.Client{Timeout: 30 * time.Second}
+		var response *http.Response
+		response, err = client.Get(raceInventorySourceURL)
+		if err == nil {
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				return fmt.Errorf("race reference returned HTTP %d", response.StatusCode)
+			}
+			contents, err = io.ReadAll(io.LimitReader(response.Body, 10*1024*1024))
+		}
+	}
+	if err != nil {
+		return err
+	}
+	rd := c.Parse(string(contents))
+	if len(rd.Race) == 0 {
+		return fmt.Errorf("reference contained no race entries; existing inventory was not changed")
+	}
+	encoded, err := json.Marshal(rd)
+	if err != nil {
+		return err
+	}
+	file := "internal/http/staticmaps/race-inventory-map.json"
+	if err := os.WriteFile(file, encoded, 0644); err != nil {
+		return err
+	}
+	fmt.Printf("Wrote %d races to [%s]\n", len(rd.Race), file)
+	return nil
+}
+
+func (c *RaceModelMapsCommand) Parse(contents string) RaceData {
+	rd := RaceData{SourceURL: raceInventorySourceURL, Client: "Rain of Fear 2 (RoF2)"}
 	doc := soup.HTMLParse(contents)
-	for i := 0; i < 1000; i++ {
+	for _, section := range doc.FindAll("span") {
+		id := section.Attrs()["id"]
+		if !strings.HasPrefix(id, "Race") {
+			continue
+		}
+		i, err := strconv.Atoi(strings.TrimPrefix(id, "Race"))
+		if err != nil {
+			continue
+		}
 
 		// add New race entry
 		raceEntry := RaceEntry{}
 		raceEntry.RaceId = i
 
 		// parse race section
-		raceId := fmt.Sprintf("Race%v", i)
-		section := doc.Find("span", "id", raceId)
 		if section.Error == nil {
 
 			// vars
@@ -102,8 +147,8 @@ func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) {
 			// parse header
 			header := section.Find("h3")
 			if header.Error == nil {
-				headerSplit1 := strings.Split(header.Text(), "-")
-				if len(headerSplit1) > 0 {
+				headerSplit1 := strings.SplitN(header.Text(), " - ", 2)
+				if len(headerSplit1) > 1 {
 					headerSplit2 := strings.Split(headerSplit1[1], ",")
 					if len(headerSplit2) > 0 {
 						raceDescription = strings.TrimSpace(headerSplit2[0])
@@ -211,6 +256,18 @@ func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) {
 							minHair, maxHair := c.GetMinMaxValues(c.GetStringInBetween(newText, "Hair: ", " "))
 							minBeard, maxBeard := c.GetMinMaxValues(c.GetStringInBetween(newText, "Beards: ", " "))
 
+							// Single-gender sources omit the explicit "Model CODE" line.
+							if modelString == "" {
+								codes := []string{}
+								for _, code := range []string{maleModel, femaleModel, neutralModel} {
+									if code != "" {
+										codes = append(codes, code)
+									}
+								}
+								if len(codes) == 1 {
+									modelString = codes[0]
+								}
+							}
 							// get gender value from string value matches
 							gender := 2
 							if len(femaleModel) > 0 && strings.Contains(modelString, femaleModel) {
@@ -222,7 +279,7 @@ func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) {
 
 							modelCode := modelString
 							// neutral
-							if gender == 2 {
+							if modelCode == "" {
 								modelCode = neutralModel
 							}
 
@@ -312,61 +369,12 @@ func (c *RaceModelMapsCommand) Handle(cmd *cobra.Command, _ []string) {
 
 	}
 
-	// get json
-	json, _ := json.Marshal(rd)
-
-	// write compressed file
-	file := "internal/http/staticmaps/race-inventory-map.json"
-	_ = ioutil.WriteFile(file, json, 0644)
-	fmt.Printf("Wrote to [%v]\n", file)
+	return rd
 }
 
 // Validate implementation of the Command interface
 func (c *RaceModelMapsCommand) Validate(_ *cobra.Command, _ []string) error {
 	return nil
-}
-
-func (c *RaceModelMapsCommand) FetchAndCache(url string, file string) string {
-	// cache file
-	cacheFile := fmt.Sprintf("%s/%s", os.TempDir(), file)
-
-	if _, err := os.Stat(cacheFile); err == nil {
-		content, err := os.ReadFile(cacheFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return string(content)
-	}
-
-	// fetch contents
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer resp.Body.Close()
-
-	// read contents
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// create file
-	f, err := os.Create(cacheFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer f.Close()
-
-	// write contents
-	_, err2 := f.Write(body)
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-
-	return string(body)
 }
 
 func (c *RaceModelMapsCommand) GetStringInBetween(value string, a string, b string) string {

@@ -1,3 +1,54 @@
+## [5.7.3] 9/16/2026
+
+**Race/Model Viewer**
+* Integrated model codes, archive filenames, and zone locations directly into the Race Viewer using the Clumsy’s World RoF2 reference.
+* Added searches by race, ID, model code, archive, and zone, plus zone filtering with optional global models.
+* Clearly identified local, imported, and global model sources.
+* Added one-click copying of model/archive pairs, such as CLM,steamfont_chr.
+* Made the new Model Locations layout the default, with a Classic Gallery toggle that preserves filters and selection.
+* Matched both viewer panes to the available page height, with independent internal scrolling.
+* Expanded the reference inventory to 731 races and corrected missing single-gender model codes and truncated race names.
+* Improved mobile layout, missing-preview handling, and loading-error recovery.
+
+## [5.7.2] 9/15/2026
+
+* Fixed Open buttons in the item editor’s Evolution Chain table. Each now opens the selected item in a new browser tab, preserving the current editor and unsaved changes.
+* Added a Feedback button to the sidebar that opens GitHub’s issue form in a new tab.
+
+## [5.7.1] 9/14/2026
+
+* Fixed missing Spell Critical Damage descriptions in spell previews, including Deadeye Discipline. Effect 155 now displays correctly.
+* Fixed Spell Critical Chance being incorrectly described as critical damage. Effect 170 now shows the chance modifier.
+* Fixed missing descriptions for rear and frontal melee damage amount bonuses. Effect 504 now displays the correct amount.
+* Added missing descriptions for flat spell damage and healing focus bonuses. Effect 508 now displays its configured amount correctly.
+
+## [5.7.0] 9/14/2026
+
+* Spire now restarts automatically after updates on Windows and Linux. The built-in launcher updates with Spire.
+* Update restarts preserve launch settings and the desktop port without opening another browser tab.
+* The update window waits for the new version before reloading. If reconnection takes too long, you can retry without reinstalling.
+* Improved update reliability with safer executable replacement, download timeouts, and clearer error messages. Failed downloads leave Spire running.
+* Improved launcher shutdown and cleanup. Manually stopping Spire also stops its launcher without triggering an update restart.
+* Added an optional background launcher for development servers that prevents extra Windows console windows while preserving logs and child processes.
+
+## [5.6.2] 9/13/2026
+
+* Fixed Server Admin incorrectly redirecting authorized users back to Home.
+* Server Admin now shows only tools permitted by the active connection. The section is hidden entirely when no tools are accessible.
+* Dashboard information, server controls, and navigation search now respect connection permissions. Access refreshes when switching connections.
+* Fixed permission checks for direct Server Admin links and Chat Administration.
+* Added dedicated database-backup permissions and improved support for granting server process management without full access.
+* Fixed misleading permission errors after successfully saving rules, Discord webhooks, and logging settings. Automatic reloads now require reload permission.
+* Added Windows and Linux update scripts with documented commands. The scripts select the newest published version, including betas, and preserve a backup of the previous executable.
+
+## [5.6.1] 9/3/2026
+
+* Fix AA Editor rank chain sentinel handling
+
+## [5.6.0] (Beta) 9/1/2026
+
+* Improved ID management within the db strings editor.
+
 ## [5.7.0] (Beta) 8/21/2026
 
 * Updated the achievement definition and character achievement editors for the final shared reward schema, with safer shared-catalog preservation, validation, concurrency handling, and reward recovery.

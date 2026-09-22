@@ -66,6 +66,7 @@ var httpSet = wire.NewSet(
 	clientfiles.NewController,
 	assets.NewController,
 	permissions.NewController,
+	permissions.NewCurrentUserController,
 	user.NewController,
 	spire.NewSettingController,
 	staticmaps.NewStaticMapController,
@@ -215,6 +216,7 @@ func provideControllers(
 	spireChangelogController *spirechangelog.Controller,
 	assetsController *assets.Controller,
 	permissionsController *permissions.Controller,
+	currentPermissionsController *permissions.CurrentUserController,
 	usersController *user.Controller,
 	settingsController *spire.SettingsController,
 	eqemuserverController *eqemuserver.Controller,
@@ -230,6 +232,7 @@ func provideControllers(
 			auth,
 		},
 		v1controllersNoPermissions: []routes.Controller{
+			currentPermissionsController,
 			me,
 			analytics,
 			connections,

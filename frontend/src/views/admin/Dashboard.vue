@@ -4,13 +4,13 @@
 
       <div class="row">
         <div class="col-sm-6 col-lg-6">
-          <dashboard-process-counts/>
+          <dashboard-process-counts v-if="canRead('eqemuserver/server-stats')"/>
 
-          <dashboard-networking-info/>
-          <dashboard-system-info-v2/>
+          <dashboard-networking-info v-if="canRead('admin/serverconfig')"/>
+          <dashboard-system-info-v2 v-if="canRead('admin/system/host')"/>
         </div>
         <div class="col-sm-6 col-lg-6">
-          <dashboard-cpu-info/>
+          <dashboard-cpu-info v-if="canRead('admin/system/cpu')"/>
         </div>
       </div>
 
@@ -18,12 +18,13 @@
 
     <!-- Right side -->
     <div class="col-lg-6">
-      <players-online-component/>
+      <players-online-component v-if="canRead('eqemuserver/client-list')"/>
     </div>
   </div>
 </template>
 
 <script>
+import {canReadAdminApi} from "@/app/user/server-admin-access";
 import ServerProcessButtonComponent from "@/views/admin/components/ServerProcessButtonComponent";
 import DashboardProcessCounts       from "@/views/admin/components/DashboardProcessCounts";
 import DashboardCpuInfo             from "@/views/admin/components/DashboardCpuInfo";
@@ -34,6 +35,7 @@ import DashboardSystemInfoV2        from "@/views/admin/components/DashboardSyst
 import DashboardNetworkingInfo      from "@/views/admin/components/DashboardNetworkingInfo.vue";
 
 export default {
+  methods: { canRead: canReadAdminApi },
   components: {
     DashboardNetworkingInfo,
     DashboardSystemInfoV2,

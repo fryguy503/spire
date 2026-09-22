@@ -45,68 +45,36 @@ type SpireWebsocketMessage struct {
 func (a *Controller) websocketHandler(c echo.Context) error {
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
+		client := &Client{WS: ws, ID: ws.Request().RemoteAddr}
+		a.manager.register <- client
+		defer func() { a.manager.unregister <- client }()
+
 		for {
-			// Register client
-			remoteAddress := ws.Request().RemoteAddr
-			uniqueID := fmt.Sprintf("%s", remoteAddress)
-			client := &Client{WS: ws, ID: uniqueID} // Assign a real unique ID
-			a.manager.register <- client
-
-			// Read from client
-			msg := ""
-			err := websocket.Message.Receive(ws, &msg)
-			if err != nil {
-				// close if error
-				if err := ws.Close(); err != nil {
-					a.manager.unregister <- client
-					break
-				}
+			var msg string
+			if err := websocket.Message.Receive(ws, &msg); err != nil {
+				return
+			}
+			if msg == "" {
+				continue
 			}
 
-			// just close empty messages
-			if len(msg) == 0 {
-				// close if error
-				if err := ws.Close(); err != nil {
-					a.manager.unregister <- client
-					break
-				}
-			}
-
-			// Write
-			if len(msg) > 0 {
-				//a.manager.broadcast <- msg
-
-				a.logger.Debug().Any("msg", msg).Msg("Received message")
-
-				var err error
-				var m SpireWebsocketMessage
-				err = json.Unmarshal([]byte(msg), &m)
-				if err != nil {
-					fmt.Println(err)
-				}
-
-				if m.Action == "hello" {
+			a.logger.Debug().Any("msg", msg).Msg("Received message")
+			var m SpireWebsocketMessage
+			err := json.Unmarshal([]byte(msg), &m)
+			if err == nil {
+				switch m.Action {
+				case "hello":
 					err = a.handler.HandleHello(ws, msg)
-				}
-				// todo: disable
-				if m.Action == "exec_server_bin" {
-					err = a.handler.HandleExecServerBin(ws, msg)
-				}
-
-				if err != nil {
-					websocket.Message.Send(ws, fmt.Sprintf("Error: %v", err))
+				default:
+					// Server mutations belong to the permission-checked HTTP APIs.
+					err = fmt.Errorf("unsupported websocket action %q", m.Action)
 				}
 			}
-
-			// close connection on error
-			// improve this later but this works well enough for now
 			if err != nil {
-				if err := ws.Close(); err != nil {
-					a.manager.unregister <- client
-					break
+				if sendErr := websocket.Message.Send(ws, fmt.Sprintf("Error: %v", err)); sendErr != nil {
+					return
 				}
 			}
-
 		}
 	}).ServeHTTP(c.Response(), c.Request())
 	return nil

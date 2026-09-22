@@ -6,7 +6,7 @@ import {AppEnv} from "@/app/env/app-env";
 import {EventBus} from "@/app/event-bus/event-bus";
 import qs from "qs";
 import {scrollToHash} from "@/app/utility/scrollToTarget";
-import UserContext from "@/app/user/UserContext";
+import {canAccessAdminRoute, refreshServerAdminAccess, serverAdminLandingRoute} from "@/app/user/server-admin-access";
 
 Vue.use(Router)
 
@@ -212,11 +212,6 @@ const router = new Router({
           path: ROUTE.QGLOBALS,
           component: () => import('./views/qglobals/QGlobalEditor.vue'),
           meta: {title: "QGlobals"},
-        },
-        {
-          path: ROUTE.ADMIN_CHAT_ADMINISTRATION,
-          component: () => import('./views/admin/chat-administration/ChatAdministration.vue'),
-          meta: {title: "Chat Administration"},
         },
         {
           path: ROUTE.ZONES,
@@ -502,8 +497,7 @@ const router = new Router({
         },
         {
           path: '/admin/ws-poc',
-          component: () => import('./views/admin/WebsocketPoc.vue'),
-          meta: {title: "Websocket POC"},
+          redirect: ROUTE.ADMIN_ROOT,
         },
       ]
     },
@@ -555,17 +549,12 @@ router.beforeEach(async (to, from, next) => {
     AppEnv.routeCheckSpireInitialized(to, router)
   }
 
-  // Admin route guard: require authenticated admin user (only when auth is configured)
-  if (to.path.startsWith('/admin')) {
-    const authEnabled = AppEnv.isLocalAuthEnabled() || AppEnv.isGithubAuthEnabled();
-    if (authEnabled) {
-      const user = await UserContext.getUser();
-      if (!user || !user.is_admin) {
-        EventBus.$emit('ROUTE_CHANGE', to);
-        next({ path: '/', replace: true });
-        return;
-      }
-    }
+  await refreshServerAdminAccess();
+  // Vue Router matches paths case-insensitively; use the matched route record
+  // so differently cased URLs cannot bypass the admin boundary.
+  if (to.matched.some(route => route.path === ROUTE.ADMIN_ROOT) && !canAccessAdminRoute(to.path)) {
+    next({ path: serverAdminLandingRoute() || '/', replace: true });
+    return;
   }
 
   EventBus.$emit('ROUTE_CHANGE', to);

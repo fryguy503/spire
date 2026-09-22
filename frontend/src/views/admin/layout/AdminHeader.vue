@@ -1,6 +1,6 @@
 <template>
   <eq-window-simple
-    v-if="stats"
+    v-if="hasHeaderAccess"
     class="admin-header-window mb-4 pb-0"
     style="font-family: 'Cerebri Sans', sans-serif; color: white; padding: 10px; z-index: 1;"
     :title="stats.server_name"
@@ -16,7 +16,7 @@
         >
 
           <!-- Server Metrics -->
-          <div class="col-lg-2 col-sm-12 mt-3-mobile pl-0 pr-0">
+          <div v-if="serverStats.length" class="col-lg-2 col-sm-12 mt-3-mobile pl-0 pr-0">
             <div class="row" v-for="(metric, index) in serverStats.filter((e) => e.value !== '')" :key="index" style="height: 15px;">
               <!-- Left Label -->
               <div class="col-lg-6 col-3 p-0 m-0 text-right">
@@ -38,7 +38,7 @@
                 <!-- Server Lock -->
                 <a
                   href="javascript:void(0)"
-                  v-if="metric.label === 'Locked'"
+                  v-if="metric.label === 'Locked' && canWrite('eqemuserver/toggle-server-lock')"
                   class="small font-weight-bold text-muted"
                   style="font-size: 12px;"
                   @click="toggleServerLock"
@@ -50,14 +50,19 @@
                     <i class="fa fa-unlock mr-1"></i> Unlocked
                   </span>
                 </a>
+                <span v-else-if="metric.label === 'Locked'" class="small">
+                  {{ serverLocked ? 'Locked' : 'Unlocked' }}
+                </span>
 
                 <!-- Server Process Button -->
                 <div v-if="metric.label === 'World'">
                   <server-process-button-component
+                    v-if="canManageProcesses()"
                     style="z-index:1000"
                     :server-status="metric.value"
                     class="d-inline-block mr-3"
                   />
+                  <span v-else class="small">{{ metric.value }}</span>
                 </div>
 
               </div>
@@ -65,7 +70,7 @@
           </div>
 
           <!-- Dash Stats -->
-          <div class="col-lg-1 col-sm-12 mt-3-mobile pl-0 pr-0">
+          <div v-if="canRead('eqemuserver/dashboard-stats')" class="col-lg-1 col-sm-12 mt-3-mobile pl-0 pr-0">
             <div class="row" v-for="(metric, index) in dashStats" :key="index" style="height: 15px;">
               <!-- Left Label -->
               <div class="col-lg-6 col-3 p-0 m-0 text-right">
@@ -135,6 +140,7 @@
 </template>
 
 <script>
+import {canReadAdminApi, canWriteAdminApi, canManageServerProcesses} from "@/app/user/server-admin-access";
 import ServerProcessButtonComponent from "@/views/admin/components/ServerProcessButtonComponent.vue";
 import {EventBus}                   from "@/app/event-bus/event-bus";
 import {SpireApi}                   from "@/app/api/spire-api";
@@ -181,6 +187,10 @@ export default {
   },
 
   computed: {
+    hasHeaderAccess() {
+      return ['eqemuserver/server-stats', 'eqemuserver/dashboard-stats',
+        'eqemuserver/system-all', 'eqemuserver/get-lock-status'].some(this.canRead)
+    },
 
     isWorldOnline() {
       if (!this.stats || !this.stats.main_process_stats) {
@@ -224,7 +234,8 @@ export default {
           label: "Locked",
           value: this.serverLocked ? "Yes" : "No",
         },
-      ]
+      ].filter(metric => this.canRead(metric.label === 'Locked'
+        ? 'eqemuserver/get-lock-status' : 'eqemuserver/server-stats'))
     },
 
     dashStats() {
@@ -322,41 +333,44 @@ export default {
     clearInterval(this.timer)
 
     EventBus.$off("ROUTE_CHANGE", this.handleRouteChange);
-    EventBus.$off('process-change')
+    EventBus.$off('process-change', this.loadServerStats)
 
     SpireWebsocket.removeEventListener('message', this.handleWebsocketMessage);
   },
   created() {
     EventBus.$on("ROUTE_CHANGE", this.handleRouteChange);
 
-    SpireWebsocket.addEventListener('message', this.handleWebsocketMessage);
+    if (this.canRead('eqemuserver/server-stats')) {
+      SpireWebsocket.addEventListener('message', this.handleWebsocketMessage);
+    }
 
     this.loadServerStats()
 
-    EventBus.$on('process-change', async (event) => {
-      this.loadServerStats()
-    })
+    EventBus.$on('process-change', this.loadServerStats)
 
     this.getServerLockedStatus()
 
-    this.timer = setInterval(() => {
-      if (!document.hidden) {
-        this.loadServerStats()
-      }
-    }, 1000)
+    if (this.canRead('eqemuserver/server-stats') || this.canRead('eqemuserver/system-all')) {
+      this.timer = setInterval(() => {
+        if (!document.hidden) this.loadServerStats()
+      }, 1000)
+    }
 
     // initial page name set
     if (this.$route.meta && this.$route.meta.title) {
       this.pageName = this.$route.meta.title
     }
 
-    SpireApi.v1().get("eqemuserver/dashboard-stats").then((r) => {
-      if (r.status === 200) {
-        this.dashstats = r.data
-      }
-    })
+    if (this.canRead('eqemuserver/dashboard-stats')) {
+      SpireApi.v1().get("eqemuserver/dashboard-stats").then((r) => {
+        if (r.status === 200) this.dashstats = r.data
+      })
+    }
   },
   methods: {
+    canRead: canReadAdminApi,
+    canWrite: canWriteAdminApi,
+    canManageProcesses: canManageServerProcesses,
 
     formatUptime(t) {
       // reformat
@@ -392,6 +406,7 @@ export default {
     },
 
     getServerLockedStatus() {
+      if (!this.canRead('eqemuserver/get-lock-status')) return
       SpireApi.v1().get("eqemuserver/get-lock-status").then((r) => {
         if (r.status === 200) {
           this.serverLocked = r.data.locked
@@ -412,14 +427,17 @@ export default {
     },
 
     async loadServerStats() {
-      SpireApi.v1().get("eqemuserver/server-stats").then((r) => {
-        if (r.status === 200) {
-          this.stats = r.data
-          this.$forceUpdate()
-          EventBus.$emit("server-stats", r.data)
-        }
-      })
+      if (this.canRead('eqemuserver/server-stats')) {
+        SpireApi.v1().get("eqemuserver/server-stats").then((r) => {
+          if (r.status === 200) {
+            this.stats = r.data
+            this.$forceUpdate()
+            EventBus.$emit("server-stats", r.data)
+          }
+        })
+      }
 
+      if (!this.canRead('eqemuserver/system-all')) return
       SpireApi.v1().get("eqemuserver/system-all").then((r) => {
         let lastSys = JSON.parse(JSON.stringify(this.sys))
 

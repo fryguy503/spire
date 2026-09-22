@@ -33,6 +33,7 @@
 - [Why Spire?](#why-spire)
 - [Upgrade AkkStack to Valorith Spire](#upgrade-akkstack-to-valorith-spire)
 - [Using Spire - Locally](#using-spire---locally)
+  - [Updating a local Spire install](#updating-a-local-spire-install)
 - [Using Spire - Hosted](#using-spire---hosted)
 - [Using Spire - Locally, but Remote](#using-spire---locally-but-remote)
 - [Feature Requests](#feature-requests)
@@ -118,6 +119,81 @@ Place the executable in your EverQuest Emulator Server directory and simply run 
 That's it. No dependencies, no installations, no extra steps.
 
 Spire on your development server instantly.
+
+### Updating a local Spire install
+
+Save your edits, open **Spire Update Check**, and install the offered update.
+Spire restarts automatically on Windows and Linux, including its built-in
+launcher. The browser reloads when the updated executable is serving requests.
+Direct desktop launches keep the same port and do not open another browser tab.
+
+The default `SPIRE_RESTART_MODE=self` works for direct launches on both systems.
+On Linux it also preserves the launcher PID tracked by systemd, Docker, and
+AkkStack. On Windows, the replacement launcher waits for the previous launcher
+to exit before starting the updated server.
+
+For a **Windows service wrapper**, set `SPIRE_RESTART_MODE=managed` in the
+service's environment and configure the wrapper to restart Spire on exit code
+`75`. In this mode Spire exits after installing an update and lets the wrapper
+start the updated executable and launcher. Use `http:serve --port <port>` for a
+fixed service address. Managed mode is also available on Linux when the service
+manager must own the restart. Do not select managed mode for an unsupervised
+process.
+
+This behavior starts after you install and launch a release containing the new
+launcher. Older releases still use their existing restart behavior for that
+first update. Download or installation failures leave the running Spire process
+available and display an error. Downloads have a five-minute limit across all
+retry attempts. The browser stops waiting for an installation response after
+six minutes and makes the update dialog usable again. If reconnecting takes more than two minutes,
+the update dialog offers **Try connecting again** without reinstalling.
+
+The launcher blocks while its worker runs; it does not poll for process health.
+If a worker ignores a stop request, the launcher terminates it after 10 seconds.
+A worker also exits if its launcher is forcibly terminated. Windows launcher
+handoffs time out after 30 seconds. Desktop readiness checks accept Basic Auth
+login challenges, reject server errors, and cancel outstanding requests when
+their timeout expires. Update preparation recreates its temporary directory if
+it was removed during the session.
+
+To verify the launcher on Windows or Linux, run:
+
+```text
+go test ./internal/selfrestart ./internal/desktop
+go test -tags=integration ./internal/updater -run "TestLauncherReliability|TestUpdateAndRestart" -v
+```
+
+The integration tests exercise real processes, consecutive binary updates,
+forced parent termination, stalled log pipes, and 50 launcher handoffs. They report idle CPU time,
+resident memory, startup overhead, and handoff latency using a local HTTP fixture
+that does not initialize a database. Set `SPIRE_LAUNCHER_QA_REPORT` to a writable
+JSON file path to save those measurements. The **Launcher reliability** GitHub
+Actions workflow runs these checks on Windows and Linux and saves the reports.
+
+#### Updating from a terminal
+
+Spire release binaries are available for Windows and Linux. To update an existing
+local install to the highest published version, including beta releases, stop
+Spire, open a terminal in the directory containing the Spire executable, and run
+the command for your operating system. Relaunch Spire after the command finishes.
+
+The updater preserves the existing executable beside the replacement with a
+timestamped `.before-*` suffix. Windows requires PowerShell and `curl.exe`;
+Linux requires Bash, `curl`, and Python 3. The updater source is available in
+[`update-spire.ps1`](scripts/update-spire.ps1) and
+[`update-spire.sh`](scripts/update-spire.sh).
+
+#### Windows PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/Valorith/spire/master/scripts/update-spire.ps1 | iex
+```
+
+#### Linux terminal
+
+```bash
+curl -fsSL --retry 3 https://raw.githubusercontent.com/Valorith/spire/master/scripts/update-spire.sh | bash
+```
 
 ![image](https://user-images.githubusercontent.com/3319450/192069875-ba916482-d28f-4b56-8819-7ce971781e87.png)
 
@@ -369,6 +445,10 @@ Make install will do the following things automatically
 At this point the installation should be complete and you should have everything that you need to develop. For good measure and because this is Windows, you should probably reboot
 
 ### Windows - Running Development Watchers
+
+To run development processes without extra console windows, use the
+[background process launcher](tools/dev-process/README.md). It captures logs
+and reports the PID to use when stopping that process and its children.
 
 To run the backend and frontend development servers in Windows; there are simply two top level batch scripts that you can run
 
