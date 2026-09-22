@@ -1,4 +1,4 @@
-## [Unreleased] (Beta) 9/21/2026
+## [5.7.4] (Beta) 9/22/2026
 
 * Combined the achievement editor work with Valorith Spire master through v5.7.3, including the updated race/model viewer, server administration permissions, and reliable application update/restart handling.
 * Preserved achievement definition and character achievement editing, shared reward catalogs, specific Alternate Advancement rewards, validation, and reward recovery.
