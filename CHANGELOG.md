@@ -1,3 +1,9 @@
+## [Unreleased] (Beta) 9/22/2026
+
+* Fixed Inventory & Keyring database errors when loading the character directory, inventory, and snapshot history on current EQEmu databases.
+* Fixed snapshot history rows losing their saved item and slot details during database loading.
+* Preserved compatibility with older inventory snapshot schemas and kept modern item unique IDs separate from legacy numeric GUIDs.
+
 ## [5.7.4] (Beta) 9/22/2026
 
 * Combined the achievement editor work with Valorith Spire master through v5.7.3, including the updated race/model viewer, server administration permissions, and reliable application update/restart handling.

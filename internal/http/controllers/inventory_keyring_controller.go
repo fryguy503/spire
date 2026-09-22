@@ -121,6 +121,7 @@ type inventoryKeyringRecord struct {
 	OrnamentIDFile    uint                      `json:"ornament_id_file"`
 	OrnamentHeroModel int                       `json:"ornament_hero_model"`
 	GUID              uint64                    `json:"guid"`
+	ItemUniqueID      string                    `json:"item_unique_id,omitempty"`
 	ContainerContents int64                     `json:"container_contents"`
 	Evolving          *inventoryKeyringEvolving `json:"evolving,omitempty"`
 }
@@ -200,6 +201,7 @@ type inventoryKeyringSnapshotRecord struct {
 	OrnamentHeroModel int                       `json:"ornament_hero_model"`
 	GUID              uint64                    `json:"guid"`
 	Augments          []inventoryKeyringAugment `json:"augments"`
+	ItemUniqueID      string                    `json:"item_unique_id,omitempty"`
 }
 
 type inventoryKeyringConflictError struct {
@@ -235,6 +237,10 @@ func (i *InventoryKeyringController) Routes() []*routes.Route {
 
 func (i *InventoryKeyringController) summary(c echo.Context) error {
 	db := i.db.Get(models.Inventory{}, c)
+	schema, err := loadInventoryKeyringSchema(db)
+	if err != nil {
+		return inventoryKeyringDatabaseError(c, err)
+	}
 	var result inventoryKeyringSummary
 	queries := []struct {
 		query string
@@ -244,8 +250,8 @@ func (i *InventoryKeyringController) summary(c echo.Context) error {
 		{"SELECT (SELECT COUNT(*) FROM inventory) + (SELECT COUNT(*) FROM sharedbank)", &result.InventoryItems},
 		{"SELECT COUNT(DISTINCT char_id) FROM keyring", &result.KeyringCharacters},
 		{"SELECT COUNT(*) FROM keyring", &result.KeyringEntries},
-		{"SELECT COUNT(DISTINCT charid) FROM inventory_snapshots", &result.SnapshotCharacters},
-		{"SELECT COUNT(*) FROM (SELECT charid, time_index FROM inventory_snapshots GROUP BY charid, time_index) snapshot_sets", &result.SnapshotSets},
+		{"SELECT COUNT(DISTINCT " + schema.snapshotCharacterID + ") FROM inventory_snapshots", &result.SnapshotCharacters},
+		{"SELECT COUNT(*) FROM (SELECT " + schema.snapshotCharacterID + ", time_index FROM inventory_snapshots GROUP BY " + schema.snapshotCharacterID + ", time_index) snapshot_sets", &result.SnapshotSets},
 	}
 	for _, query := range queries {
 		if err := db.Raw(query.query).Scan(query.dest).Error; err != nil {
@@ -257,6 +263,10 @@ func (i *InventoryKeyringController) summary(c echo.Context) error {
 
 func (i *InventoryKeyringController) listCharacters(c echo.Context) error {
 	db := i.db.Get(models.CharacterDatum{}, c)
+	schema, err := loadInventoryKeyringSchema(db)
+	if err != nil {
+		return inventoryKeyringDatabaseError(c, err)
+	}
 	page, limit := inventoryKeyringPagination(c)
 	search := strings.TrimSpace(c.QueryParam("q"))
 	state := strings.ToLower(strings.TrimSpace(c.QueryParam("state")))
@@ -272,7 +282,7 @@ func (i *InventoryKeyringController) listCharacters(c echo.Context) error {
 	case "keyring":
 		base = base.Where("EXISTS (SELECT 1 FROM keyring kr WHERE kr.char_id = ch.id)")
 	case "snapshots":
-		base = base.Where("EXISTS (SELECT 1 FROM inventory_snapshots snap WHERE snap.charid = ch.id)")
+		base = base.Where("EXISTS (SELECT 1 FROM inventory_snapshots snap WHERE snap." + schema.snapshotCharacterID + " = ch.id)")
 	case "empty":
 		base = base.Where("NOT EXISTS (SELECT 1 FROM inventory inv WHERE inv.character_id = ch.id) AND NOT EXISTS (SELECT 1 FROM sharedbank sb WHERE sb.account_id = ch.account_id) AND NOT EXISTS (SELECT 1 FROM keyring kr WHERE kr.char_id = ch.id)")
 	}
@@ -293,7 +303,7 @@ func (i *InventoryKeyringController) listCharacters(c echo.Context) error {
 		((SELECT COUNT(*) FROM inventory inv WHERE inv.character_id = ch.id) +
 		 (SELECT COUNT(*) FROM sharedbank sb WHERE sb.account_id = ch.account_id)) AS inventory_count,
 		(SELECT COUNT(*) FROM keyring kr WHERE kr.char_id = ch.id) AS key_count,
-		(SELECT COUNT(DISTINCT snap.time_index) FROM inventory_snapshots snap WHERE snap.charid = ch.id) AS snapshot_count
+		(SELECT COUNT(DISTINCT snap.time_index) FROM inventory_snapshots snap WHERE snap.` + schema.snapshotCharacterID + ` = ch.id) AS snapshot_count
 	`).Order("ch.name, ch.id").Limit(limit).Offset((page - 1) * limit).Scan(&results).Error; err != nil {
 		return inventoryKeyringDatabaseError(c, err)
 	}
@@ -322,6 +332,10 @@ func (i *InventoryKeyringController) getSnapshot(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Snapshot time index must be a positive integer"})
 	}
 	db := i.db.Get(models.InventorySnapshot{}, c)
+	schema, err := loadInventoryKeyringSchema(db)
+	if err != nil {
+		return inventoryKeyringDatabaseError(c, err)
+	}
 	var characterCount int64
 	if err := db.Table("character_data").Where("id = ?", characterID).Count(&characterCount).Error; err != nil {
 		return inventoryKeyringDatabaseError(c, err)
@@ -331,10 +345,10 @@ func (i *InventoryKeyringController) getSnapshot(c echo.Context) error {
 	}
 	var rows []inventoryKeyringRawSnapshot
 	if err := db.Table("inventory_snapshots snap").
-		Select(inventoryKeyringSnapshotSelect).
-		Joins("LEFT JOIN items item ON item.id = snap.itemid").
-		Where("snap.charid = ? AND snap.time_index = ?", characterID, timeIndex).
-		Order("snap.slotid").Scan(&rows).Error; err != nil {
+		Select(schema.snapshotSelect).
+		Joins("LEFT JOIN items item ON item.id = snap."+schema.snapshotItemID).
+		Where("snap."+schema.snapshotCharacterID+" = ? AND snap.time_index = ?", characterID, timeIndex).
+		Order("snap." + schema.snapshotSlotID).Scan(&rows).Error; err != nil {
 		return inventoryKeyringDatabaseError(c, err)
 	}
 	if len(rows) == 0 {
@@ -800,7 +814,7 @@ func (r InventoryKeyringRawItem) item() inventoryKeyringItem {
 	}
 }
 
-type inventoryKeyringRawInventory struct {
+type InventoryKeyringRawInventory struct {
 	CharacterID       int    `gorm:"column:character_id"`
 	AccountID         int    `gorm:"column:account_id"`
 	StorageKind       string `gorm:"column:storage_kind"`
@@ -820,6 +834,7 @@ type inventoryKeyringRawInventory struct {
 	OrnamentIDFile    uint   `gorm:"column:ornament_id_file"`
 	OrnamentHeroModel int    `gorm:"column:ornament_hero_model"`
 	GUID              uint64 `gorm:"column:guid"`
+	ItemUniqueID      string `gorm:"column:item_unique_id"`
 	InventoryKeyringRawItem
 }
 
@@ -917,7 +932,7 @@ const inventoryKeyringSharedBankSelect = `
 
 type inventoryKeyringRawSnapshot struct {
 	TimeIndex int64 `gorm:"column:time_index"`
-	inventoryKeyringRawInventory
+	InventoryKeyringRawInventory
 }
 
 const inventoryKeyringSnapshotSelect = `
@@ -966,6 +981,10 @@ const inventoryKeyringSnapshotSelect = `
 `
 
 func loadInventoryKeyringCharacter(db *gorm.DB, id int) (*inventoryKeyringCharacterDetail, error) {
+	schema, err := loadInventoryKeyringSchema(db)
+	if err != nil {
+		return nil, err
+	}
 	var character inventoryKeyringCharacterSummary
 	if err := db.Table("character_data ch").Joins("LEFT JOIN account a ON a.id = ch.account_id").Select(`
 		ch.id,
@@ -979,12 +998,12 @@ func loadInventoryKeyringCharacter(db *gorm.DB, id int) (*inventoryKeyringCharac
 		((SELECT COUNT(*) FROM inventory inv WHERE inv.character_id = ch.id) +
 		 (SELECT COUNT(*) FROM sharedbank sb WHERE sb.account_id = ch.account_id)) AS inventory_count,
 		(SELECT COUNT(*) FROM keyring kr WHERE kr.char_id = ch.id) AS key_count,
-		(SELECT COUNT(DISTINCT snap.time_index) FROM inventory_snapshots snap WHERE snap.charid = ch.id) AS snapshot_count
+		(SELECT COUNT(DISTINCT snap.time_index) FROM inventory_snapshots snap WHERE snap.`+schema.snapshotCharacterID+` = ch.id) AS snapshot_count
 	`).Where("ch.id = ? AND ch.deleted_at IS NULL", id).Take(&character).Error; err != nil {
 		return nil, err
 	}
-	var rows []inventoryKeyringRawInventory
-	if err := db.Table("inventory inv").Select(inventoryKeyringInventorySelect).
+	var rows []InventoryKeyringRawInventory
+	if err := db.Table("inventory inv").Select(schema.inventorySelect).
 		Joins("LEFT JOIN items item ON item.id = inv.item_id").
 		Where("inv.character_id = ?", id).Order("inv.slot_id").Scan(&rows).Error; err != nil {
 		return nil, err
@@ -993,8 +1012,8 @@ func loadInventoryKeyringCharacter(db *gorm.DB, id int) (*inventoryKeyringCharac
 		rows[index].AccountID = character.AccountID
 		rows[index].StorageKind = inventoryStorageCharacter
 	}
-	var sharedRows []inventoryKeyringRawInventory
-	if err := db.Table("sharedbank sb").Select(inventoryKeyringSharedBankSelect).
+	var sharedRows []InventoryKeyringRawInventory
+	if err := db.Table("sharedbank sb").Select(schema.sharedBankSelect).
 		Joins("LEFT JOIN items item ON item.id = sb.item_id").
 		Where("sb.account_id = ?", character.AccountID).Order("sb.slot_id").Scan(&sharedRows).Error; err != nil {
 		return nil, err
@@ -1087,14 +1106,14 @@ func loadInventoryKeyringCharacter(db *gorm.DB, id int) (*inventoryKeyringCharac
 	}
 	snapshots := make([]inventoryKeyringSnapshotSummary, 0)
 	if err := db.Table("inventory_snapshots").Select("time_index, COUNT(*) AS item_count").
-		Where("charid = ?", id).Group("time_index").Order("time_index DESC").Limit(30).Scan(&snapshots).Error; err != nil {
+		Where(schema.snapshotCharacterID+" = ?", id).Group("time_index").Order("time_index DESC").Limit(30).Scan(&snapshots).Error; err != nil {
 		return nil, err
 	}
 	slots := inventoryKeyringSlotOptions(inventory)
 	return &inventoryKeyringCharacterDetail{Character: character, Inventory: inventory, Keyring: keys, Snapshots: snapshots, Slots: slots}, nil
 }
 
-func hydrateInventoryKeyringRows(db *gorm.DB, rows []inventoryKeyringRawInventory) ([]inventoryKeyringRecord, error) {
+func hydrateInventoryKeyringRows(db *gorm.DB, rows []InventoryKeyringRawInventory) ([]inventoryKeyringRecord, error) {
 	augmentIDs := make([]int, 0)
 	for _, row := range rows {
 		for _, id := range []int{row.AugmentOne, row.AugmentTwo, row.AugmentThree, row.AugmentFour, row.AugmentFive, row.AugmentSix} {
@@ -1128,16 +1147,16 @@ func hydrateInventoryKeyringRows(db *gorm.DB, rows []inventoryKeyringRawInventor
 			ItemID: row.ItemID, Item: row.InventoryKeyringRawItem.item(), Charges: row.Charges, Color: row.Color,
 			Augments: augments, InstanceNoDrop: row.InstanceNoDrop > 0, CustomData: row.CustomData,
 			OrnamentIcon: row.OrnamentIcon, OrnamentIDFile: row.OrnamentIDFile,
-			OrnamentHeroModel: row.OrnamentHeroModel, GUID: row.GUID, ContainerContents: int64(len(children)),
+			OrnamentHeroModel: row.OrnamentHeroModel, GUID: row.GUID, ItemUniqueID: row.ItemUniqueID, ContainerContents: int64(len(children)),
 		})
 	}
 	return records, nil
 }
 
 func hydrateInventoryKeyringSnapshots(db *gorm.DB, rows []inventoryKeyringRawSnapshot) ([]inventoryKeyringSnapshotRecord, error) {
-	baseRows := make([]inventoryKeyringRawInventory, 0, len(rows))
+	baseRows := make([]InventoryKeyringRawInventory, 0, len(rows))
 	for _, row := range rows {
-		baseRows = append(baseRows, row.inventoryKeyringRawInventory)
+		baseRows = append(baseRows, row.InventoryKeyringRawInventory)
 	}
 	hydrated, err := hydrateInventoryKeyringRowsWithoutChildren(db, baseRows)
 	if err != nil {
@@ -1151,13 +1170,13 @@ func hydrateInventoryKeyringSnapshots(db *gorm.DB, rows []inventoryKeyringRawSna
 			Item: record.Item, Charges: record.Charges, InstanceNoDrop: record.InstanceNoDrop,
 			CustomData: record.CustomData, OrnamentIcon: record.OrnamentIcon,
 			OrnamentIDFile: record.OrnamentIDFile, OrnamentHeroModel: record.OrnamentHeroModel,
-			GUID: record.GUID, Augments: record.Augments,
+			GUID: record.GUID, ItemUniqueID: record.ItemUniqueID, Augments: record.Augments,
 		})
 	}
 	return records, nil
 }
 
-func hydrateInventoryKeyringRowsWithoutChildren(db *gorm.DB, rows []inventoryKeyringRawInventory) ([]inventoryKeyringRecord, error) {
+func hydrateInventoryKeyringRowsWithoutChildren(db *gorm.DB, rows []InventoryKeyringRawInventory) ([]inventoryKeyringRecord, error) {
 	augmentIDs := make([]int, 0)
 	for _, row := range rows {
 		augmentIDs = append(augmentIDs, row.AugmentOne, row.AugmentTwo, row.AugmentThree, row.AugmentFour, row.AugmentFive, row.AugmentSix)
@@ -1183,26 +1202,30 @@ func hydrateInventoryKeyringRowsWithoutChildren(db *gorm.DB, rows []inventoryKey
 			ItemID: row.ItemID, Item: row.InventoryKeyringRawItem.item(), Charges: row.Charges, Color: row.Color,
 			Augments: augments, InstanceNoDrop: row.InstanceNoDrop > 0, CustomData: row.CustomData,
 			OrnamentIcon: row.OrnamentIcon, OrnamentIDFile: row.OrnamentIDFile,
-			OrnamentHeroModel: row.OrnamentHeroModel, GUID: row.GUID,
+			OrnamentHeroModel: row.OrnamentHeroModel, GUID: row.GUID, ItemUniqueID: row.ItemUniqueID,
 		})
 	}
 	return records, nil
 }
 
 func loadInventoryKeyringRecord(db *gorm.DB, characterID, slotID int) (inventoryKeyringRecord, error) {
+	schema, err := loadInventoryKeyringSchema(db)
+	if err != nil {
+		return inventoryKeyringRecord{}, err
+	}
 	accountID, err := inventoryKeyringAccountID(db, characterID)
 	if err != nil {
 		return inventoryKeyringRecord{}, err
 	}
-	var rows []inventoryKeyringRawInventory
+	var rows []InventoryKeyringRawInventory
 	if inventoryKeyringStorageKind(slotID) == inventoryStorageSharedBank {
-		if err := db.Table("sharedbank sb").Select(inventoryKeyringSharedBankSelect).
+		if err := db.Table("sharedbank sb").Select(schema.sharedBankSelect).
 			Joins("LEFT JOIN items item ON item.id = sb.item_id").
 			Where("sb.account_id = ? AND sb.slot_id = ?", accountID, slotID).Limit(1).Scan(&rows).Error; err != nil {
 			return inventoryKeyringRecord{}, err
 		}
 	} else {
-		if err := db.Table("inventory inv").Select(inventoryKeyringInventorySelect).
+		if err := db.Table("inventory inv").Select(schema.inventorySelect).
 			Joins("LEFT JOIN items item ON item.id = inv.item_id").
 			Where("inv.character_id = ? AND inv.slot_id = ?", characterID, slotID).Limit(1).Scan(&rows).Error; err != nil {
 			return inventoryKeyringRecord{}, err
