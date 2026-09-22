@@ -48,7 +48,7 @@ if [ -f "$PACKAGE_FILE" ]; then
   fi
 fi
 
-for remote_name in upstream origin; do
+for remote_name in origin upstream; do
   if remote_url=$(git -C "$ROOT_DIR" remote get-url "$remote_name" 2>/dev/null); then
     if repo=$(normalize_repo "$remote_url"); then
       printf '%s\n' "$repo"
@@ -57,4 +57,4 @@ for remote_name in upstream origin; do
   fi
 done
 
-printf 'Valorith/spire\n'
+printf 'fryguy503/spire\n'

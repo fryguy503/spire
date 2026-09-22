@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly RELEASE_URL="https://github.com/Valorith/spire/releases/latest/download/spire-linux-amd64.zip"
+readonly RELEASE_URL="https://github.com/fryguy503/spire/releases/latest/download/spire-linux-amd64.zip"
 readonly RELEASE_BINARY="spire-linux-amd64"
 
 info() {
@@ -73,7 +73,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-info "Downloading the latest Valorith Spire release"
+info "Downloading the latest combined-fork Spire release"
 curl \
   --fail \
   --location \
@@ -126,6 +126,6 @@ done
 replacement_installed=0
 
 printf '\n'
-printf 'Spire has been upgraded to the latest Valorith release.\n'
+printf 'Spire has been upgraded to the latest combined-fork release.\n'
 printf 'Open Spire and refresh the page. Future updates can be installed inside Spire.\n'
 printf 'Backup: %s\n' "$backup_path"

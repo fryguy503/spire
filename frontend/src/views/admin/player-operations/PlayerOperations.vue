@@ -623,6 +623,8 @@
                 </div>
               </div>
 
+              <saved-expeditions :character-id="editModel.id" />
+
               <div class="spire-editor-section-heading operations-subheading">
                 <div>
                   <span class="spire-editor-section-kicker">Related records</span>
@@ -1087,6 +1089,7 @@ import EqWindow from '@/components/eq-ui/EQWindow.vue'
 import CharacterOverview from './components/CharacterOverview.vue'
 import AccountOverview from './components/AccountOverview.vue'
 import GuildOverview from './components/GuildOverview.vue'
+import SavedExpeditions from './components/SavedExpeditions.vue'
 import { SpireApi } from '@/app/api/spire-api'
 import { DB_PLAYER_RACES } from '@/app/constants/eq-races-constants'
 import { DB_PLAYER_CLASSES } from '@/app/constants/eq-classes-constants'
@@ -1130,7 +1133,7 @@ function emptySummary () {
 
 export default {
   name: 'PlayerOperations',
-  components: { ContentArea, EqWindow, CharacterOverview, AccountOverview, GuildOverview },
+  components: { ContentArea, EqWindow, CharacterOverview, AccountOverview, GuildOverview, SavedExpeditions },
   data () {
     return {
       modes: [

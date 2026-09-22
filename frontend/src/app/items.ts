@@ -195,6 +195,7 @@ export class Items {
       "focuseffect": "The spell ID used for the focus effect on this item. (-1 for none)",
       "fr": "The amount of Fire Resist provided by this item.",
       "fvnodrop": "Sets item to NO DROP under the FV ruleset",
+      "kinbound": "Explicit selection: 0 Unlisted, 1 Always Kinbound, 2 Never Kinbound. Always requires a saved NO TRADE item without NO TRANSFER or a known epic exclusion. Expansion never grants eligibility. Kinbound is shared within the same forum account until permanent attunement.",
       "haste": "",
       "clicklevel": "The required level to use the click effect on this item.",
       "hp": "The amount of Hit Points provided by this item.",

@@ -8,7 +8,7 @@ ENV PUID ${PUID}
 ARG PGID=1000
 ENV PGID ${PGID}
 
-ENV GO_VERSION 1.19.1
+ENV GO_VERSION 1.23.12
 
 RUN apt-get update -yqq && \
     groupadd -g ${PGID} go && \
@@ -59,8 +59,8 @@ RUN chsh -s /bin/bash go
 
 USER go
 
-RUN go install github.com/air-verse/air@latest
-RUN go install github.com/gobuffalo/packr/packr@latest
+RUN go install github.com/air-verse/air@v1.61.7
+RUN go install github.com/gobuffalo/packr/packr@v1.30.1
 
 #######################################################################
 # node

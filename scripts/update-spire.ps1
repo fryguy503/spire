@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ReleaseApiUrl = "https://api.github.com/repos/Valorith/spire/releases?per_page=100"
+$ReleaseApiUrl = "https://api.github.com/repos/fryguy503/spire/releases?per_page=100"
 $ReleaseAssetName = "spire-windows-amd64.exe.zip"
 $ReleaseBinaryName = "spire-windows-amd64.exe"
 

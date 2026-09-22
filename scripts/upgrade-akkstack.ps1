@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ReleaseUrl = "https://github.com/Valorith/spire/releases/latest/download/spire-linux-amd64.zip"
+$ReleaseUrl = "https://github.com/fryguy503/spire/releases/latest/download/spire-linux-amd64.zip"
 $ReleaseBinary = "spire-linux-amd64"
 $ComposeMode = ""
 
@@ -94,7 +94,7 @@ $ReplacementInstalled = $false
 $ServerStopped = $false
 
 try {
-    Write-Step "Downloading the latest Valorith Spire release"
+    Write-Step "Downloading the latest combined-fork Spire release"
     $DownloadError = $null
     for ($DownloadAttempt = 1; $DownloadAttempt -le 4; $DownloadAttempt++) {
         try {
@@ -169,7 +169,7 @@ mv '$ContainerStagingDirectory/$ReleaseBinary' '$ContainerStagedSpire'
     $ReplacementInstalled = $false
 
     Write-Host ""
-    Write-Host "Spire has been upgraded to the latest Valorith release."
+    Write-Host "Spire has been upgraded to the latest combined-fork release."
     Write-Host "Open Spire and refresh the page. Future updates can be installed inside Spire."
     Write-Host "Backup: $BackupPath"
 }

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 cwd=$(pwd)
 release_repo=$(./scripts/resolve-release-repo.sh)
 
@@ -23,7 +25,7 @@ if [ $(curl -s "https://api.github.com/repos/$release_repo/tags" | jq -r '.[0].n
 # make strip-extra-assets
 
 #:: Build SPA (Frontend)
-cd "$cwd/frontend" && npm install && npm run build
+cd "$cwd/frontend" && npm ci && npm run build
 
 #:: Pack frontend assets into binary
 cd "$cwd" && make build-binary

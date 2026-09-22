@@ -31,7 +31,7 @@
 <hr>
 
 - [Why Spire?](#why-spire)
-- [Upgrade AkkStack to Valorith Spire](#upgrade-akkstack-to-valorith-spire)
+- [Upgrade AkkStack to the Combined Spire Fork](#upgrade-akkstack-to-the-combined-spire-fork)
 - [Using Spire - Locally](#using-spire---locally)
   - [Updating a local Spire install](#updating-a-local-spire-install)
 - [Using Spire - Hosted](#using-spire---hosted)
@@ -65,10 +65,10 @@ Rich, deep, tooling that leaves no stone un-turned for quality and intuitiveness
 
 Built for the long haul with code generation to make keeping things up to date far easier.
 
-## Upgrade AkkStack to Valorith Spire
+## Upgrade AkkStack to the Combined Spire Fork
 
 Use one of these options once to replace AkkStack's upstream Spire with the
-latest Valorith release.
+latest combined-fork release.
 
 ### Option 1: Automatic upgrade (recommended)
 
@@ -78,13 +78,13 @@ run the command for your system.
 #### Linux or WSL
 
 ```bash
-upgrade_script="$(curl -fsSL --retry 3 https://raw.githubusercontent.com/Valorith/spire/master/scripts/upgrade-akkstack.sh)" && bash -c "$upgrade_script"
+upgrade_script="$(curl -fsSL --retry 3 https://raw.githubusercontent.com/fryguy503/spire/master/scripts/upgrade-akkstack.sh)" && bash -c "$upgrade_script"
 ```
 
 #### Windows PowerShell
 
 ```powershell
-& { $ErrorActionPreference = "Stop"; irm https://raw.githubusercontent.com/Valorith/spire/master/scripts/upgrade-akkstack.ps1 | iex }
+& { $ErrorActionPreference = "Stop"; irm https://raw.githubusercontent.com/fryguy503/spire/master/scripts/upgrade-akkstack.ps1 | iex }
 ```
 
 The script downloads the release, backs up the current binary, restarts
@@ -93,7 +93,7 @@ AkkStack, and automatically restores the backup if the new Spire does not start.
 ### Option 2: Manual upgrade
 
 1. Download `spire-linux-amd64.zip` from the
-   [latest Valorith Spire release](https://github.com/Valorith/spire/releases/latest).
+   [combined-fork Spire releases](https://github.com/fryguy503/spire/releases), including the current beta.
 2. From your AkkStack folder, run `docker compose stop eqemu-server`.
 3. Back up `server/bin/spire`, extract the ZIP, and replace it with the extracted
    `spire-linux-amd64` file renamed to `spire`.
@@ -112,7 +112,7 @@ upstream build again.
 
 ## Using Spire - Locally
 
-Download the [latest release](https://github.com/Valorith/spire/releases). for your operating system.
+Download the [latest release](https://github.com/fryguy503/spire/releases). for your operating system.
 
 Place the executable in your EverQuest Emulator Server directory and simply run it.
 
@@ -186,13 +186,13 @@ Linux requires Bash, `curl`, and Python 3. The updater source is available in
 #### Windows PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/Valorith/spire/master/scripts/update-spire.ps1 | iex
+irm https://raw.githubusercontent.com/fryguy503/spire/master/scripts/update-spire.ps1 | iex
 ```
 
 #### Linux terminal
 
 ```bash
-curl -fsSL --retry 3 https://raw.githubusercontent.com/Valorith/spire/master/scripts/update-spire.sh | bash
+curl -fsSL --retry 3 https://raw.githubusercontent.com/fryguy503/spire/master/scripts/update-spire.sh | bash
 ```
 
 ![image](https://user-images.githubusercontent.com/3319450/192069875-ba916482-d28f-4b56-8819-7ce971781e87.png)
@@ -218,15 +218,15 @@ If you want to run Spire without an EQEmu server installation, place it in an em
 
 ## Feature Requests
 
-Interested in a feature in Spire? Please file an [issue](https://github.com/EQEmuTools/spire/issues) in the issue tracker with the prefix `[Feature Request]`
+Interested in a feature in Spire? Please file an [issue](https://github.com/fryguy503/spire/issues) in the issue tracker with the prefix `[Feature Request]`
 
 ## Reporting Bugs
 
-Found a bug? Please file an [issue](https://github.com/EQEmuTools/spire/issues) in the issue tracker with the prefix `[Bug]`
+Found a bug? Please file an [issue](https://github.com/fryguy503/spire/issues) in the issue tracker with the prefix `[Bug]`
 
 ## Contributing
 
-Want to help contribute to Spire? Anyone can submit [pull requests](https://github.com/EQEmuTools/spire/pulls) however learning the skills required to work in this project might require some extra help and learning resources.
+Want to help contribute to Spire? Anyone can submit [pull requests](https://github.com/fryguy503/spire/pulls) however learning the skills required to work in this project might require some extra help and learning resources.
 
 ### Contributing - Project Layout - Backend
 
@@ -298,16 +298,22 @@ The runtime app updater checks GitHub releases from the first configured reposit
 1. `SPIRE_RELEASE_REPO`
 2. `eqemu_config.json` `spire.release_repository`
 3. `package.json` `spire.release_repository`
-4. `git remote upstream`
-5. `git remote origin`
-6. fallback to `Valorith/spire`
+4. `git remote origin`
+5. `git remote upstream`
+6. fallback to `fryguy503/spire`
 
 Release publishing scripts use the same default and `package.json` setting, with `SPIRE_RELEASE_REPO` as the CI override.
+
+For this combined fork, publish from `master` in `fryguy503/spire`. Keep the top changelog section marked `(Beta)` while validating the achievement, Kinbound, and saved-expedition changes; a patch release from 5.7.3 prepares v5.7.4 as a GitHub prerelease. The workflow uses Go 1.23.12, Node 20, Packr 1.30.1, and go-winres 0.3.3, builds both Linux and Windows AMD64 binaries plus server installers, and preserves the existing stable update channel.
+
+See [Bastion extension setup](docs/development/bastion-extensions.md) for Kinbound and saved-expedition database prerequisites and usage.
+
+Discord announcements are disabled unless the repository variable `SPIRE_DISCORD_RELEASE_ANNOUNCEMENTS` is explicitly set to `true` and a `DISCORD_WEBHOOK_URL` secret is configured. Publishing a release does not enable announcements.
 
 ![image](https://user-images.githubusercontent.com/3319450/192076389-0c18c58c-21de-4319-b5eb-d41801a0a063.png)
 
 
-The release is published to the [releases page](https://github.com/Valorith/spire/releases), which is the same source Spire checks for updates by default.
+The release is published to the [releases page](https://github.com/fryguy503/spire/releases), which is the same source Spire checks for updates by default.
 
   ![image](https://user-images.githubusercontent.com/3319450/192076335-f5e0b810-1240-45e9-91e1-52def88845fb.png)
 
@@ -330,7 +336,7 @@ These instructions assume you have **git**, **node,** **docker** already install
 First clone Spire, copy the base `.env.dev` file to the `.env` used by Spire in local development and run `make install` in one line below.
 
 ```
-git clone https://github.com/EQEmuTools/spire.git
+git clone https://github.com/fryguy503/spire.git
 ```
 
 ###  Linux - Install
@@ -404,7 +410,7 @@ You **can** point the `.env` to a separate eqemu server installation if you want
 Clone Spire to a directory of your choosing
 
 ```
-git clone https://github.com/EQEmuTools/spire.git
+git clone https://github.com/fryguy503/spire.git
 ```
 
 ### Windows - Init

@@ -227,13 +227,13 @@ strip-extra-assets: ##@build Strips extra assets not needed to packet into binar
 	rm -rf frontend/public/eq-asset-preview-master/assets/item_icons
 
 build-frontend: ##@build Builds frontend to be packed into binary
-	cd frontend && npm install && npm run build
+	cd frontend && npm ci && npm run build
 
 build-binary: ##@build Build and packs release binary
 	packr clean
 	packr --compress
 	GOOS=linux GOARCH=amd64 go build -o spire-linux-amd64
-	go install github.com/tc-hib/go-winres@latest
+	go install github.com/tc-hib/go-winres@v0.3.3
 	go-winres make
 	GOOS=windows GOARCH=amd64 go build -o spire-windows-amd64.exe
 	zip spire-linux-amd64.zip spire-linux-amd64
@@ -244,7 +244,7 @@ release-binary: ##@build Releases binary
 
 build-installer-binary: ##@build Builds installer binary
 	GOOS=linux GOARCH=amd64 go build -o eqemu-server-installer-linux-amd64 ./cmd/installer/
-	go install github.com/tc-hib/go-winres@latest
+	go install github.com/tc-hib/go-winres@v0.3.3
 	go-winres make --arch amd64 --in ./cmd/installer/winres.json --out ./cmd/installer/
 	mv cmd/installer/_windows_amd64.syso cmd/installer/rsrc_windows_amd64.syso
 	GOOS=windows GOARCH=amd64 go build -o eqemu-server-installer-windows-amd64.exe ./cmd/installer/

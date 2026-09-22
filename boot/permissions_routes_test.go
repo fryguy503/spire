@@ -70,6 +70,8 @@ func TestCurrentPermissionsRouteDoesNotRequireResourceGrants(t *testing.T) {
 				nil,       // factionEditor
 				nil,       // contentFlagEditor
 				nil,       // alternateCurrencyEditor
+				nil,       // itemKinbound
+				nil,       // achievementEditor
 				nil,       // mailParcelsEditor
 				nil,       // mercenaryEditor
 				nil,       // playerOperations

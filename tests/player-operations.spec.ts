@@ -7,6 +7,7 @@ type PlayerOperationsMockState = {
   characterUpdate?: Record<string, unknown>;
   accessUpdate?: Record<string, unknown>;
   sanctionUpdate?: Record<string, unknown>;
+  savedExpeditions?: Record<string, unknown>;
 };
 
 const characterContext = {
@@ -185,6 +186,13 @@ async function installPlayerOperationsMocks(page: Page, state: PlayerOperationsM
         guild_members: 1,
       });
     }
+    if (/^\/character\/\d+\/saved-expeditions$/.test(path) && request.method() === 'GET') {
+      return fulfill(state.savedExpeditions || {
+        available: false,
+        message: 'Saved expedition history is not installed on this database.',
+        entries: [],
+      });
+    }
     if (path === '/characters') {
       return fulfill({ data: [state.character], total: 1, page: 1, limit: 30 });
     }
@@ -294,6 +302,51 @@ async function installPlayerOperationsMocks(page: Page, state: PlayerOperationsM
 }
 
 test.describe('Player Operations', () => {
+  test('shows saved DZ eligibility and known blockers without offering rejoin mutations', async ({ page }) => {
+    const expedition = {
+      dz_id: 42, uuid: '01234567-0123-4567-89ab-0123456789ab', name: 'Saved Sentinel',
+      instance_id: 101, zone_id: 124, zone_version: 0, season_id: 0, members: 0, max_members: 6,
+      expires: 17200, leader: 'Alder', status: 'server_check', database_eligible: true,
+    };
+    const state: PlayerOperationsMockState = {
+      character: characterRecord(), account: accountRecord(), guild: guildRecord(),
+      savedExpeditions: {
+        available: true, configured_enabled: true, server_time: 10000,
+        message: 'Database snapshot only. DZManager checks live rules, pending invitations and current location again when the player rejoins.',
+        entries: [expedition, { ...expedition, dz_id: 43, uuid: '11234567-0123-4567-89ab-0123456789ab', name: 'Locked Sentinel', status: 'locked', database_eligible: false }],
+      },
+    };
+    await installPlayerOperationsMocks(page, state);
+    const mutations: string[] = [];
+    page.on('request', request => {
+      if (request.url().includes('saved-expeditions') && request.method() !== 'GET') mutations.push(request.method());
+    });
+    await page.goto('/admin/player-operations?mode=characters&tab=Connections&character=1');
+    const panel = page.getByTestId('saved-expeditions');
+    await expect(panel.getByText('Saved Sentinel', { exact: true })).toBeVisible();
+    await expect(panel.getByText('Eligible pending server check', { exact: true })).toBeVisible();
+    await expect(panel.getByText('Expedition locked', { exact: true })).toBeVisible();
+    await expect(panel.getByRole('cell', { name: /^2h 0m / })).toHaveCount(2);
+    await panel.getByLabel('Show eligible only').check();
+    await expect(panel.getByText('Locked Sentinel', { exact: true })).toHaveCount(0);
+    await expect(panel.getByText('Saved Sentinel', { exact: true })).toBeVisible();
+    await panel.getByRole('button', { name: 'Refresh expeditions' }).click();
+    await expect(panel.getByText('Saved Sentinel', { exact: true })).toBeVisible();
+    expect(mutations).toEqual([]);
+    await expect(panel.getByRole('button', { name: /rejoin/i })).toHaveCount(0);
+  });
+
+  test('keeps character connections usable without DZManager history', async ({ page }) => {
+    const state: PlayerOperationsMockState = {
+      character: characterRecord(), account: accountRecord(), guild: guildRecord(),
+    };
+    await installPlayerOperationsMocks(page, state);
+    await page.goto('/admin/player-operations?mode=characters&tab=Connections&character=1');
+    await expect(page.getByTestId('saved-expeditions').getByText('Saved expedition history is not installed on this database.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Operational footprint' })).toBeVisible();
+    await expect(page.getByTitle('Open this account')).toBeVisible();
+  });
+
   test('keeps the record-type surface responsive', async ({ page }) => {
     const state: PlayerOperationsMockState = {
       character: characterRecord(),

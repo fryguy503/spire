@@ -1,3 +1,41 @@
+## [Unreleased] (Beta) 9/21/2026
+
+* Combined the achievement editor work with Valorith Spire master through v5.7.3, including the updated race/model viewer, server administration permissions, and reliable application update/restart handling.
+* Preserved achievement definition and character achievement editing, shared reward catalogs, specific Alternate Advancement rewards, validation, and reward recovery.
+* Added a Kinbound tab with an explicit save action in the item editor, matching the current EQEmu source policy for eligible NO TRADE items shared through the same forum account.
+* Added saved expedition history to character expedition tracking, including eligible instances players can rejoin and the reasons other saved instances are unavailable.
+* Configured this combined fork to publish and check for updates from fryguy503/spire, with reproducible release tooling and optional Discord announcements disabled by default.
+
+### Achievement branch history
+
+These original branch versions overlap upstream release numbers; their dates and notes are retained here when combining the branches.
+
+#### Achievement branch 5.7.0 (Beta), 8/21/2026
+
+* Updated the achievement definition and character achievement editors for the final shared reward schema, with safer shared-catalog preservation, validation, concurrency handling, and reward recovery.
+* Bounded achievement validation and reference queries so large content catalogs remain responsive and fail safely.
+* Added specific Alternate Advancement rewards with AA rank-chain lookup, class eligibility guidance, fallback-item validation, recovery support, and focused backend and browser coverage.
+
+#### Achievement branch 5.6.3 (Beta), 8/8/2026
+
+* Fixed achievement item lookup rows to retain their icon grid instead of inheriting the EQ window button skin.
+
+#### Achievement branch 5.6.2 (Beta), 8/8/2026
+
+* Fixed item criterion lookup results to render the native item icon supplied by the achievement lookup API.
+
+#### Achievement branch 5.6.1 (Beta), 8/8/2026
+
+* Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.
+* Fixed character achievement directory queries on MariaDB by replacing the reserved `character` table alias.
+
+#### Achievement branch 5.6.0 (Beta), 8/8/2026
+
+* Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
+* Added Character Achievement administration with paginated state inspection, orphan diagnostics, exact progress repair, guarded completion/reset tools, reward recovery, and pending-mutation management.
+* Added fail-closed achievement schema diagnostics, split content/player database support, transactional stable-identity protection, optimistic concurrency, and audited high-risk operations.
+* Added achievement editor navigation, responsive layouts, contextual field help, canonical EQEmu skill labels, and focused backend and browser regression coverage.
+
 ## [5.7.3] 9/16/2026
 
 **Race/Model Viewer**
@@ -48,32 +86,6 @@
 ## [5.6.0] (Beta) 9/1/2026
 
 * Improved ID management within the db strings editor.
-
-## [5.7.0] (Beta) 8/21/2026
-
-* Updated the achievement definition and character achievement editors for the final shared reward schema, with safer shared-catalog preservation, validation, concurrency handling, and reward recovery.
-* Bounded achievement validation and reference queries so large content catalogs remain responsive and fail safely.
-* Added specific Alternate Advancement rewards with AA rank-chain lookup, class eligibility guidance, fallback-item validation, recovery support, and focused backend and browser coverage.
-
-## [5.6.3] (Beta) 8/8/2026
-
-* Fixed achievement item lookup rows to retain their icon grid instead of inheriting the EQ window button skin.
-
-## [5.6.2] (Beta) 8/8/2026
-
-* Fixed item criterion lookup results to render the native item icon supplied by the achievement lookup API.
-
-## [5.6.1] (Beta) 8/8/2026
-
-* Fixed achievement definition loading by excluding manually hydrated graph children from GORM relationship discovery.
-* Fixed character achievement directory queries on MariaDB by replacing the reserved `character` table alias.
-
-## [5.6.0] (Beta) 8/8/2026
-
-* Added a complete World Data achievement editor for definitions, categories, criteria, rewards, selectable reward sets, cast restrictions, references, validation, and authoring guidance.
-* Added Character Achievement administration with paginated state inspection, orphan diagnostics, exact progress repair, guarded completion/reset tools, reward recovery, and pending-mutation management.
-* Added fail-closed achievement schema diagnostics, split content/player database support, transactional stable-identity protection, optimistic concurrency, and audited high-risk operations.
-* Added achievement editor navigation, responsive layouts, contextual field help, canonical EQEmu skill labels, and focused backend and browser regression coverage.
 
 ## [5.5.2] (Beta) 7/31/2026
 

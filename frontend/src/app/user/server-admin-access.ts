@@ -94,6 +94,7 @@ interface AdminTool {
 export const serverAdminTools: AdminTool[] = [
   { path: ROUTE.ADMIN_PLAYERS_ONLINE, read: ['eqemuserver/client-list'] },
   { path: ROUTE.ADMIN_PLAYER_OPERATIONS, read: ['player-operations'] },
+  { path: ROUTE.ADMIN_CHARACTER_ACHIEVEMENTS, read: ['character-achievement-editor'] },
   { path: ROUTE.ADMIN_MAIL_PARCELS, read: ['mail-parcels-editor'] },
   { path: ROUTE.ADMIN_INVENTORY_KEYRING, read: ['inventory-keyring'] },
   { path: ROUTE.ADMIN_CHAT_ADMINISTRATION, read: ['chat-administration'] },

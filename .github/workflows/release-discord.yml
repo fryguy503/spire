@@ -8,6 +8,8 @@ permissions: {}
 
 jobs:
   announce:
+    # Fork releases do not send messages unless the repository owner opts in.
+    if: ${{ vars.SPIRE_DISCORD_RELEASE_ANNOUNCEMENTS == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Send release announcement

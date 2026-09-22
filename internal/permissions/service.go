@@ -51,6 +51,7 @@ func (s *Service) RegisterManualResources() map[string][]string {
 		"Faction Editor":            {"faction-editor"},
 		"Content Flag Editor":       {"content-flag-editor"},
 		"Alternate Currency Editor": {"alternate-currency-editor"},
+		"Item Kinbound":             {"item-kinbound"},
 		"Achievement Editor":        {"achievement-editor"},
 		"Character Achievements":    {"character-achievement-editor"},
 		"Mail & Parcels Editor":     {"mail-parcels-editor"},

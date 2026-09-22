@@ -142,6 +142,25 @@ const scopedPermissions = (read: string[] = [], write: string[] = []) => ({
   connection_id: 1, read_all: false, write_all: false, read, write,
 });
 
+test('character achievement read permission keeps the merged editor accessible', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['character-achievement-editor']) });
+  await page.goto('/admin/character-achievements');
+  await expect(page).toHaveURL(/\/admin\/character-achievements$/);
+  await expect(page.getByRole('heading', { name: 'Character Achievements', exact: true })).toBeVisible();
+  await expect(page.locator('#sidebar').getByRole('link', { name: 'Character Achievements', exact: false })).toBeVisible();
+});
+
+test('content achievement permission does not grant character achievement administration', async ({ page }) => {
+  await mockServer(page, { permissions: scopedPermissions(['achievement-editor']) });
+  let stateRequests = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/v1/character-achievement-editor/')) stateRequests++;
+  });
+  await page.goto('/admin/character-achievements');
+  await expect(page).toHaveURL(/\/$/);
+  expect(stateRequests).toBe(0);
+});
+
 for (const path of ['/admin/chat-administration', '/ADMIN/CHAT-ADMINISTRATION']) {
   test(`Chat Administration rejects an unpermitted direct URL: ${path}`, async ({ page }) => {
     await mockServer(page, { permissions: scopedPermissions() });

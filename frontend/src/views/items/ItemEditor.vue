@@ -941,6 +941,10 @@
               </div>
             </eq-tab>
 
+            <eq-tab name="Kinbound">
+              <item-kinbound-editor ref="kinboundEditor" :item-id="item.id"/>
+            </eq-tab>
+
             <eq-tab name="Evolving" class="minified-inputs">
               <div class="row">
                 <div class="col-12 col-xl-8">
@@ -1897,6 +1901,7 @@ import {Navbar}             from "@/app/navbar";
 import {SpireQueryBuilder}  from "../../app/api/spire-query-builder";
 import {Zones}              from "../../app/zones";
 import EvolvingChainSelector from "./components/EvolvingChainSelector.vue";
+import ItemKinboundEditor from "./components/ItemKinboundEditor.vue";
 import {
   getCachedItemName,
   getCurrentEvolutionDetail,
@@ -1936,7 +1941,8 @@ export default {
     EqTabs,
     EqWindow,
     EqWindowFancy,
-    EvolvingChainSelector
+    EvolvingChainSelector,
+    ItemKinboundEditor
   },
   data() {
     return {
@@ -2336,6 +2342,7 @@ export default {
           Items.setItem(this.item.id, this.item) // update cache
           this.sendNotification("Item updated successfully!")
           EditFormFieldUtil.resetFieldEditedStatus()
+          if (this.$refs.kinboundEditor) this.$nextTick(this.$refs.kinboundEditor.markModified)
         }
 
         if (result.data.error) {
@@ -2362,6 +2369,7 @@ export default {
           if (createRes.status === 200) {
             this.sendNotification("Created new Item!")
             EditFormFieldUtil.resetFieldEditedStatus()
+            if (this.$refs.kinboundEditor) this.$nextTick(this.$refs.kinboundEditor.markModified)
 
             this.$router.push(
               {

@@ -6,7 +6,7 @@ import (
 	spirerelease "github.com/EQEmuTools/spire/internal/release"
 )
 
-func TestSpireInstallerReleaseRepositoryUsesValorithFork(t *testing.T) {
+func TestSpireInstallerReleaseRepositoryUsesCombinedFork(t *testing.T) {
 	owner, repo, err := spireInstallerReleaseRepository()
 	if err != nil {
 		t.Fatalf("spireInstallerReleaseRepository() returned error: %v", err)
@@ -16,7 +16,7 @@ func TestSpireInstallerReleaseRepositoryUsesValorithFork(t *testing.T) {
 	if got != spirerelease.DefaultRepository {
 		t.Fatalf("spireInstallerReleaseRepository() = %q, want configured default %q", got, spirerelease.DefaultRepository)
 	}
-	if got != "Valorith/spire" {
-		t.Fatalf("spireInstallerReleaseRepository() = %q, want Valorith/spire", got)
+	if got != "fryguy503/spire" {
+		t.Fatalf("spireInstallerReleaseRepository() = %q, want fryguy503/spire", got)
 	}
 }

@@ -457,6 +457,7 @@ func (p *PlayerOperationsController) Routes() []*routes.Route {
 		routes.RegisterRoute(http.MethodGet, "player-operations/summary", p.summary, nil),
 		routes.RegisterRoute(http.MethodGet, "player-operations/characters", p.listCharacters, nil),
 		routes.RegisterRoute(http.MethodGet, "player-operations/character/:id", p.getCharacter, nil),
+		routes.RegisterRoute(http.MethodGet, "player-operations/character/:id/saved-expeditions", p.getSavedExpeditions, nil),
 		routes.RegisterRoute(http.MethodPatch, "player-operations/character/:id", p.updateCharacter, nil),
 		routes.RegisterRoute(http.MethodPost, "player-operations/character/:id/transfer", p.transferCharacter, nil),
 		routes.RegisterRoute(http.MethodPost, "player-operations/character/:id/relocate", p.relocateCharacter, nil),

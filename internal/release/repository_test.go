@@ -69,8 +69,21 @@ func TestResolveRepositoryPrefersEnvOverride(t *testing.T) {
 	}
 }
 
-func TestResolveRepositoryDefaultIsValorithSpire(t *testing.T) {
-	if got := ResolveRepository("", nil, nil); got != "Valorith/spire" {
-		t.Fatalf("ResolveRepository() = %q, want %q", got, "Valorith/spire")
+func TestResolveRepositoryDefaultIsCombinedFork(t *testing.T) {
+	if got := ResolveRepository("", nil, nil); got != "fryguy503/spire" {
+		t.Fatalf("ResolveRepository() = %q, want %q", got, "fryguy503/spire")
+	}
+}
+
+func TestResolveRepositoryPrefersOriginOverUpstream(t *testing.T) {
+	lookup := func(name string) (string, error) {
+		if name == "origin" {
+			return "git@github.com:fryguy503/spire.git", nil
+		}
+		return "git@github.com:Valorith/spire.git", nil
+	}
+	details := ResolveRepositoryDetails("", nil, lookup)
+	if details.Repository != "fryguy503/spire" || details.Source != "git_remote_origin" {
+		t.Fatalf("unexpected repository resolution: %+v", details)
 	}
 }

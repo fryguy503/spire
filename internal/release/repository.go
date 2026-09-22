@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const DefaultRepository = "Valorith/spire"
+const DefaultRepository = "fryguy503/spire"
 
 var githubRepoRegexp = regexp.MustCompile(`github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$`)
 
@@ -84,7 +84,7 @@ func ResolveRepositoryDetailsWithConfig(envOverride string, configOverride strin
 	}
 
 	if remoteLookup != nil {
-		for _, remoteName := range []string{"upstream", "origin"} {
+		for _, remoteName := range []string{"origin", "upstream"} {
 			remoteURL, err := remoteLookup(remoteName)
 			if err != nil {
 				continue

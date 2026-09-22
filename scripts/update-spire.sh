@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly RELEASE_API_URL="https://api.github.com/repos/Valorith/spire/releases?per_page=100"
+readonly RELEASE_API_URL="https://api.github.com/repos/fryguy503/spire/releases?per_page=100"
 readonly RELEASE_ASSET_NAME="spire-linux-amd64.zip"
 readonly RELEASE_BINARY_NAME="spire-linux-amd64"
 
