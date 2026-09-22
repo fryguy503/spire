@@ -1,4 +1,4 @@
-## [Unreleased] (Beta) 9/22/2026
+## [5.7.5] (Beta) 9/22/2026
 
 * Fixed Inventory & Keyring database errors when loading the character directory, inventory, and snapshot history on current EQEmu databases.
 * Fixed snapshot history rows losing their saved item and slot details during database loading.
