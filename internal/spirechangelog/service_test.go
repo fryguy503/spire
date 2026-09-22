@@ -425,6 +425,8 @@ func TestLoadStateIncludesConfiguredReleaseRepositoryAndCandidates(t *testing.T)
 }
 
 func TestUpdateReleaseRepositoryWritesLivePackageJSON(t *testing.T) {
+	// This test verifies package configuration; CI may set a higher-priority override.
+	t.Setenv("SPIRE_RELEASE_REPO", "")
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "CHANGELOG.md"), "## [1.0.0] 1/1/2026\n\n* Existing entry\n")
 	mustWriteFile(t, filepath.Join(dir, "package.json"), "{\n  \"name\": \"spire\",\n  \"version\": \"1.0.0\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/EQEmuTools/spire.git\"\n  }\n}\n")
